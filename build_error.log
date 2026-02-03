@@ -1,0 +1,21 @@
+
+> opencode-pixel-office@0.1.0 build:client
+> vite build --config client/vite.config.ts
+
+vite v5.4.21 building for production...
+transforming...
+✓ 24 modules transformed.
+x Build failed in 528ms
+error during build:
+[vite]: Rollup failed to resolve import "class-variance-authority" from "/Users/ddx/Desktop/dd-projects/pixel-opencode/client/src/components/ui/badge.tsx".
+This is most likely unintended because it can break your application at runtime.
+If you do want to externalize this module explicitly add it to
+`build.rollupOptions.external`
+    at viteWarn (file:///Users/ddx/Desktop/dd-projects/pixel-opencode/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:65855:17)
+    at onwarn (file:///Users/ddx/Desktop/dd-projects/pixel-opencode/node_modules/@vitejs/plugin-react/dist/index.js:90:7)
+    at onRollupWarning (file:///Users/ddx/Desktop/dd-projects/pixel-opencode/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:65885:5)
+    at onwarn (file:///Users/ddx/Desktop/dd-projects/pixel-opencode/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:65550:7)
+    at file:///Users/ddx/Desktop/dd-projects/pixel-opencode/node_modules/rollup/dist/es/shared/node-entry.js:20972:13
+    at Object.logger [as onLog] (file:///Users/ddx/Desktop/dd-projects/pixel-opencode/node_modules/rollup/dist/es/shared/node-entry.js:22945:9)
+    at ModuleLoader.handleInvalidResolvedId (file:///Users/ddx/Desktop/dd-projects/pixel-opencode/node_modules/rollup/dist/es/shared/node-entry.js:21689:26)
+    at file:///Users/ddx/Desktop/dd-projects/pixel-opencode/node_modules/rollup/dist/es/shared/node-entry.js:21647:26
