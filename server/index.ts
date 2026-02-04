@@ -1,6 +1,7 @@
 import http from "node:http";
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import { WebSocketServer } from "ws";
@@ -66,6 +67,7 @@ type OfficeState = {
   sessions: Map<string, SessionInfo>;
   bossMessage: BossMessage | null;
   messageRoles: Map<string, string>;
+  networkIp: string | null;
 };
 
 type EventPayload = {
@@ -88,6 +90,7 @@ const officeState: OfficeState = {
   sessions: new Map(),
   bossMessage: null,
   messageRoles: new Map(),
+  networkIp: null,
 };
 
 const MAX_DESKS = 15;
@@ -563,10 +566,10 @@ const upsertSession = (event: EventPayload) => {
   const existing = officeState.sessions.get(info.id);
   const nextInfo = existing
     ? {
-        ...existing,
-        ...info,
-        updatedAt: Date.now(),
-      }
+      ...existing,
+      ...info,
+      updatedAt: Date.now(),
+    }
     : info;
   officeState.sessions.set(info.id, nextInfo);
 };
@@ -585,15 +588,15 @@ const updateSessionStatus = (event: EventPayload) => {
   const existing = officeState.sessions.get(sessionId);
   const nextInfo = existing
     ? {
-        ...existing,
-        status,
-        updatedAt: Date.now(),
-      }
+      ...existing,
+      status,
+      updatedAt: Date.now(),
+    }
     : {
-        id: sessionId,
-        status,
-        updatedAt: Date.now(),
-      };
+      id: sessionId,
+      status,
+      updatedAt: Date.now(),
+    };
   officeState.sessions.set(sessionId, nextInfo);
 };
 
@@ -847,6 +850,7 @@ const getStateSnapshot = () => {
       })
     ),
     bossMessage: officeState.bossMessage,
+    networkIp: officeState.networkIp,
     updatedAt: Date.now(),
   };
 };
@@ -945,6 +949,23 @@ wss.on("connection", (socket: any) => {
   socket.send(JSON.stringify({ type: "state", state: getStateSnapshot() }));
 });
 
-server.listen(PORT, () => {
-  console.log(`Pixel office server listening on http://localhost:${PORT}`);
+const getLocalIp = () => {
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      // Skip over non-IPv4 and internal (i.e. 127.0.0.1) addresses
+      if (net.family === "IPv4" && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return "localhost";
+};
+
+server.listen(PORT, "0.0.0.0", () => {
+  const ip = getLocalIp();
+  officeState.networkIp = ip;
+  console.log(`Pixel Office Server Running:`);
+  console.log(`  Local:   http://localhost:${PORT}`);
+  console.log(`  Network: http://${ip}:${PORT}`);
 });

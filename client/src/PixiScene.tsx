@@ -568,14 +568,14 @@ const SceneLayer = ({
 
   const getRandomWalkable = (allowChairs: boolean) => {
     if (!collisionMap) return { row: 32, col: 32 };
-      for (let i = 0; i < 80; i++) {
-        const r = Math.floor(Math.random() * collisionMap.rows);
-        const c = Math.floor(Math.random() * collisionMap.cols);
-        const state = collisionMap.grid[r][c];
-        if (state <= 0) continue;
-        if (!allowChairs && state === 2) continue;
-        return { row: r, col: c };
-      }
+    for (let i = 0; i < 80; i++) {
+      const r = Math.floor(Math.random() * collisionMap.rows);
+      const c = Math.floor(Math.random() * collisionMap.cols);
+      const state = collisionMap.grid[r][c];
+      if (state <= 0) continue;
+      if (!allowChairs && state === 2) continue;
+      return { row: r, col: c };
+    }
     return { row: 32, col: 32 };
   };
 
@@ -1355,16 +1355,16 @@ const SceneLayer = ({
           const motion = 0;
           const direction = sprite.direction || "front";
           const movement = Math.hypot(sprite.targetX - sprite.x, sprite.targetY - sprite.y);
-        const isRunning = movement > 0.8;
-        const isWalking = movement > 0.2;
-        const currentTile = pixelToTile(sprite.x, sprite.y);
-        const isOnWorkChair = Boolean(
-          collisionMap?.workNodes?.some(
-            (node) => node.row === currentTile.row && node.col === currentTile.col
-          )
-        );
-        const shouldJump = agent.status === "thinking" && isOnWorkChair;
-        const state = shouldJump ? "jump" : isRunning ? "run" : isWalking ? "walk" : "idle";
+          const isRunning = movement > 0.8;
+          const isWalking = movement > 0.2;
+          const currentTile = pixelToTile(sprite.x, sprite.y);
+          const isOnWorkChair = Boolean(
+            collisionMap?.workNodes?.some(
+              (node) => node.row === currentTile.row && node.col === currentTile.col
+            )
+          );
+          const shouldJump = agent.status === "thinking" && isOnWorkChair;
+          const state = shouldJump ? "jump" : isRunning ? "run" : isWalking ? "walk" : "idle";
           const sheet = spriteSheets[state] || spriteSheets.idle;
           const frameCount = sheet?.right.length || 1;
           const frameSpeed = isRunning ? 90 : isWalking ? 120 : 200;
@@ -1452,7 +1452,7 @@ const SceneLayer = ({
           const labelPaddingX = 4;
           const chipHeight = 12;
           const chipGap = 4;
-                const labelY = y + 34 + motion;
+          const labelY = y + 34 + motion;
           const activityBubbleSize = 18;
           const activityBubbleX = sprite.x - activityBubbleSize / 2;
           const messageBubble: MessageBubbleData = {
@@ -1627,7 +1627,7 @@ export const PixiScene = (props: PixiSceneProps) => {
     <Stage
       width={dimensions.width}
       height={dimensions.height}
-      style={{ width: dimensions.width, height: dimensions.height, display: "block" }}
+      style={{ display: "block" }}
       options={{
         antialias: false,
         backgroundColor: 0x101615,

@@ -64,7 +64,15 @@ A standard OpenCode plugin script that hooks into the event bus:
 -   `session` events (status changes)
 -   `fs` events (file modifications)
 
-## Installation
+## 📱 Mobile Support
+
+Monitor your agents from your phone or tablet!
+
+-   **Network Access**: The server automatically binds to your LAN IP.
+-   **QR Code**: In the dashboard, click the Network URL in the top-right corner to reveal a QR code. Scan it to instantly connect.
+-   **Responsive Design**: The dashboard adapts to portrait and landscape modes on mobile devices.
+
+![Mobile View](docs/mobile_preview.png)
 
 ## Installation
 

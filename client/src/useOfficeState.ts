@@ -71,6 +71,7 @@ type OfficeStatePayload = {
   appVersion?: string | null;
   lastTodoSummary?: TodoSummary | null;
   bossMessage?: BossMessage | null;
+  networkIp?: string | null;
 };
 
 const createSocketUrl = () => {
@@ -90,6 +91,7 @@ export const useOfficeState = () => {
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [lastTodoSummary, setLastTodoSummary] = useState<TodoSummary | null>(null);
   const [bossMessage, setBossMessage] = useState<BossMessage | null>(null);
+  const [networkIp, setNetworkIp] = useState<string | null>(null);
 
   useEffect(() => {
     let socket: WebSocket | null = null;
@@ -120,6 +122,7 @@ export const useOfficeState = () => {
             setAppVersion(nextState.appVersion || null);
             setLastTodoSummary(nextState.lastTodoSummary || null);
             setBossMessage(nextState.bossMessage || null);
+            setNetworkIp(nextState.networkIp || null);
             if (nextState.activeSessionId) {
               const nextActive = nextState.activeSessionId ?? null;
               setSelectedSessionId((current) => current ?? nextActive);
@@ -187,6 +190,7 @@ export const useOfficeState = () => {
     appVersion,
     lastTodoSummary,
     bossMessage,
+    networkIp,
     setSelectedAgentId,
     setSelectedSessionId,
   };

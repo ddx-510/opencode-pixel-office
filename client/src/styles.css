@@ -224,6 +224,13 @@ main {
   position: relative;
 }
 
+.pixi-wrapper canvas {
+  width: 100% !important;
+  height: auto !important;
+  object-fit: contain;
+  max-height: 80vh; /* Prevent it from taking over too much vertical space */
+}
+
 .pixi-wrapper::before {
   content: "OFFICE_VIEW";
   position: absolute;
@@ -366,5 +373,31 @@ main {
 @media (max-width: 900px) {
   main {
     grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .app {
+    padding: 12px;
+  }
+
+  header {
+    margin-bottom: 16px;
+  }
+
+  /* Make sidebar stack visibly underneath */
+  .sidebar-stack {
+    width: 100%;
   }
 }
+
+@media (max-width: 600px) {
+  /* Smaller font for mobile */
+  :root {
+    font-size: 14px;
+  }
+  
+  .gamish-card {
+    border-width: 2px;
+  }
+}
+
