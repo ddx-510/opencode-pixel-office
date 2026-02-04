@@ -170,5 +170,12 @@ export const PixelOfficePlugin = async ({ directory, worktree, client }) => {
         }
       }
     },
+    dispose: async () => {
+      if (serverProcess) {
+        // console.log("[Pixel Office] Killing server process...");
+        serverProcess.kill();
+        serverProcess = null;
+      }
+    },
   };
 };

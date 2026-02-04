@@ -94,6 +94,12 @@ Monitor your agents from your phone or tablet!
 3.  **Start OpenCode**:
     Simply open your IDE. Pixel Office will auto-launch in your browser at `http://localhost:5100`.
 
+### CLI Commands
+
+-   **Install**: `opencode-pixel-office install [--port <number>]`
+-   **Uninstall**: `opencode-pixel-office uninstall`
+-   **Stop Server**: `opencode-pixel-office stop` (Manually kills the server process on the configured port)
+
 ### 🛠️ For Developers
 
 If you want to modify the source code or contribute:

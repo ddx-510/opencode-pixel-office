@@ -29,10 +29,20 @@ const printHelp = () => {
   console.log("Usage:");
   console.log("  opencode-pixel-office install [--yes] [--port <number>]");
   console.log("  opencode-pixel-office uninstall");
+  console.log("  opencode-pixel-office stop");
   console.log("\nOptions:");
   console.log("  --port <number> Configure the server port (default: 5100)");
   console.log("  --no-json       Skip updating opencode.json");
   console.log("  --yes, -y       Overwrite without prompting");
+};
+
+const loadConfig = () => {
+  try {
+    if (fs.existsSync(PIXEL_OFFICE_CONFIG_PATH)) {
+      return JSON.parse(fs.readFileSync(PIXEL_OFFICE_CONFIG_PATH, 'utf8'));
+    }
+  } catch (e) { }
+  return {};
 };
 
 const prompt = async (question) => {
@@ -103,6 +113,35 @@ const run = async () => {
     }
 
     console.log("\nUninstallation complete.");
+    process.exit(0);
+  }
+
+  if (args.includes("stop")) {
+    const config = loadConfig();
+    const port = config.port || 5100;
+
+    console.log(`Stopping Pixel Office server on port ${port}...`);
+    try {
+      const pidOutput = execSync(`lsof -t -i :${port}`).toString().trim();
+      if (pidOutput) {
+        const pid = parseInt(pidOutput, 10);
+        if (!isNaN(pid) && pid > 0) {
+          process.kill(pid);
+          console.log(`✓ Server stopped (PID: ${pid})`);
+        } else {
+          console.log(`- No server found on port ${port} (PID: ${pidOutput})`);
+        }
+      } else {
+        console.log(`- No server found on port ${port}`);
+      }
+    } catch (e) {
+      if (e.message.includes("Command failed")) {
+        // likely lsof failed meaning no process found
+        console.log(`- No server found on port ${port}`);
+      } else {
+        console.error(`! Failed to stop server: ${e.message}`);
+      }
+    }
     process.exit(0);
   }
 
