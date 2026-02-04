@@ -1,4 +1,4 @@
-const DEFAULT_PORT = 3000;
+const DEFAULT_PORT = 5100;
 const resolveEndpoint = () => {
   const raw =
     process.env.PIXEL_OFFICE_URL ||
@@ -40,6 +40,7 @@ export const PixelOfficePlugin = async ({ directory, worktree, client }) => {
   const openCommand = resolveOpenCommand(serverUrl);
   let serverProcess = null;
   let browserOpened = false;
+  let warnedOnce = false;
 
   const startServerIfNeeded = async () => {
     if (!endpointInfo.isLocal || serverProcess) {
@@ -101,7 +102,10 @@ export const PixelOfficePlugin = async ({ directory, worktree, client }) => {
           body: JSON.stringify(event),
         });
       } catch (error) {
-        console.error("PixelOfficePlugin failed to send event", error);
+        if (!warnedOnce) {
+          warnedOnce = true;
+          console.error("PixelOfficePlugin failed to send event", error);
+        }
       }
     },
   };

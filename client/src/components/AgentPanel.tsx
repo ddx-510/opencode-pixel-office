@@ -1,43 +1,67 @@
 import type { Agent } from "../useOfficeState";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 
 type AgentPanelProps = {
   selectedAgent: Agent | null;
 };
 
 const AgentPanel = ({ selectedAgent }: AgentPanelProps) => (
-  <Card className="border-[3px] bg-[#d4dee1] text-[#24343a] border-[#4a5f66] shadow-[0_4px_0_#4a5f66]">
-    <CardHeader className="pb-2">
-      <CardTitle className="text-[9px] uppercase tracking-[0.18em] text-[#24343a]">Agent</CardTitle>
-    </CardHeader>
-    <CardContent className="text-[10px] space-y-4">
-      {selectedAgent ? (
-        <>
-          <div className="flex flex-col items-start gap-1.5 mb-2">
-            <Badge className="!m-0 bg-[#7ac7a2] border-[#2e5c46] text-[#1a3427] px-2.5 py-1 text-[8px] tracking-[0.08em] uppercase border-[3px] shadow-[0_3px_0_#2e5c46]">
-              {selectedAgent.alias || selectedAgent.name || "Agent"}
-            </Badge>
-            <Badge className="!m-0 bg-[#c3a4da] border-[#5c3a77] text-[#2f1f40] px-2.5 py-1 text-[8px] tracking-[0.08em] uppercase border-[3px] shadow-[0_3px_0_#5c3a77]">
-              {selectedAgent.model || "unknown"}
-            </Badge>
+  <div className="data-panel">
+    <div className="gamish-panel-title">
+      <span>AGENT PROFILE</span>
+    </div>
+
+    {selectedAgent ? (
+      <div className="flex flex-col gap-4">
+        <div className="flex gap-3 items-center">
+          <div className="w-10 h-10 bg-slate-900 border-2 border-slate-600 rounded flex items-center justify-center">
+            <span className="text-xl">👾</span>
           </div>
-          <div className="space-y-1">
-            <span className="block text-[#4c6068] text-[9px]">Status: {selectedAgent.status}</span>
-            {selectedAgent.provider && (
-              <span className="block text-[#4c6068] text-[9px]">Provider: {selectedAgent.provider}</span>
-            )}
-            {selectedAgent.lastMessageSnippet && (
-              <span className="block text-[#4c6068] text-[9px]">Last: {selectedAgent.lastMessageSnippet.slice(0, 42)}</span>
-            )}
-            <span className="block text-[#4c6068] text-[9px]">Session: {selectedAgent.sessionId || selectedAgent.id}</span>
+          <div className="flex flex-col">
+            <span className="text-primary font-bold text-xs uppercase tracking-wider">{selectedAgent.alias || selectedAgent.name || "Unknown Agent"}</span>
+            <span className="text-[9px] text-slate-400 uppercase">{selectedAgent.role || "Operative"}</span>
           </div>
-        </>
-      ) : (
-        <p className="text-[9px] text-[#4c6068]">Select an agent</p>
-      )}
-    </CardContent>
-  </Card>
+        </div>
+
+        <div className="agent-stats">
+          <div className="stat-box">
+            <span className="stat-label">Model</span>
+            <span className="stat-value truncate block">{selectedAgent.model || "N/A"}</span>
+          </div>
+          <div className="stat-box">
+            <span className="stat-label">Status</span>
+            <span className={`stat-value uppercase ${selectedAgent.status === 'working' ? 'text-amber-400' : 'text-slate-400'}`}>
+              {selectedAgent.status || "IDLE"}
+            </span>
+          </div>
+          <div className="stat-box col-span-2">
+            <span className="stat-label">Provider</span>
+            <span className="stat-value">{selectedAgent.provider || "Unknown"}</span>
+          </div>
+        </div>
+
+        {selectedAgent.sessionId && (
+          <div className="border-t border-slate-700 pt-2">
+            <span className="stat-label mb-1">Assigned Session</span>
+            <div className="text-[9px] font-mono text-emerald-400/80 bg-emerald-950/30 p-1.5 rounded border border-emerald-900/50 truncate">
+              {selectedAgent.sessionId}
+            </div>
+          </div>
+        )}
+
+        {selectedAgent.lastMessageSnippet && (
+          <div className="bg-slate-900/50 p-2 rounded border border-slate-700/50">
+            <span className="stat-label mb-1 text-slate-500">Last Transmission</span>
+            <p className="text-[9px] text-slate-300 italic">"{selectedAgent.lastMessageSnippet.slice(0, 100)}{selectedAgent.lastMessageSnippet.length > 100 ? '...' : ''}"</p>
+          </div>
+        )}
+      </div>
+    ) : (
+      <div className="flex flex-col items-center justify-center py-6 text-slate-600 gap-2">
+        <span className="text-2xl opacity-20">?</span>
+        <span className="text-[9px] uppercase">Select an agent</span>
+      </div>
+    )}
+  </div>
 );
 
 export { AgentPanel };

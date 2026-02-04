@@ -1,0 +1,106 @@
+:root {
+  color-scheme: light;
+  font-family: "Press Start 2P", "Courier New", monospace;
+  background: #dfe7ea;
+  color: #2a3a3d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at top, #e9eff2, #cbd9df 60%, #b5c6cf);
+}
+
+.hero {
+  padding: 48px 24px 32px;
+  text-align: center;
+}
+
+.hero h1 {
+  margin: 0 0 12px;
+  font-size: 20px;
+  letter-spacing: 0.08em;
+}
+
+.hero p {
+  margin: 0 0 24px;
+  font-size: 11px;
+  color: #3f5158;
+}
+
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.button {
+  text-decoration: none;
+  padding: 10px 16px;
+  border: 3px solid #4a5f66;
+  color: #1f2b33;
+  background: #e6eeef;
+  box-shadow: 0 4px 0 #4a5f66;
+  font-size: 10px;
+}
+
+.button.secondary {
+  background: #cfe0e6;
+}
+
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 24px 48px;
+}
+
+.section {
+  margin-top: 36px;
+}
+
+.section h2 {
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.card {
+  background: #eef3f5;
+  border: 3px solid #4a5f66;
+  padding: 12px;
+  box-shadow: 0 4px 0 #4a5f66;
+}
+
+.placeholder {
+  height: 140px;
+  background: repeating-linear-gradient(45deg, #c7d5db, #c7d5db 10px, #dde7eb 10px, #dde7eb 20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4a5f66;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+footer {
+  text-align: center;
+  padding: 24px 12px 40px;
+  font-size: 9px;
+  color: #3f5158;
+}
+
+code {
+  font-family: "Courier New", monospace;
+  background: #f4f7f8;
+  padding: 2px 6px;
+  border: 2px solid #4a5f66;
+}

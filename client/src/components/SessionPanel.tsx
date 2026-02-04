@@ -1,5 +1,4 @@
 import type { SessionInfo } from "../useOfficeState";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type SessionPanelProps = {
   sessions: SessionInfo[];
@@ -33,56 +32,81 @@ const SessionPanel = ({
     });
 
   return (
-    <Card className="border-[3px] bg-[#d4dee1] text-[#24343a] border-[#4a5f66] shadow-[0_4px_0_#4a5f66]">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-[9px] uppercase tracking-[0.18em] text-[#24343a]">Session</CardTitle>
-      </CardHeader>
-      <CardContent className="text-[10px] space-y-4">
-        <div className="space-y-1">
-          <span className="block text-[#4c6068] text-[9px]">Active: {activeLabel}</span>
-          <span className="block text-[#4c6068] text-[9px]">Version: {version}</span>
-          <span className="block text-[#4c6068] text-[9px]">Todos: {todoSummary}</span>
-        </div>
+    <div className="data-panel">
+      <div className="gamish-panel-title">
+        <span>MISSION LOG</span>
+      </div>
 
-        <div>
-          <div className="text-[8px] uppercase tracking-[0.12em] text-[#24343a] mb-1.5">Sessions</div>
-          <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
-            {displaySessions.length === 0 ? (
-              <span className="text-[#4c6068] text-[9px]">No sessions</span>
-            ) : (
-              displaySessions.map((session) => (
-                <button
-                  key={session.id}
-                  type="button"
-                  className={`text-left p-2.5 rounded-xl border-[3px] text-[9px] min-h-[36px] transition-colors
-                    ${session.id === selectedSessionId
-                      ? "bg-[#7ac7a2] border-[#2e5c46] text-[#1a3427]"
-                      : "bg-[#c6d6db] border-[#6c848d] text-[#22343a] hover:bg-[#bcced4]"
-                    }`}
-                  onClick={() => onSelectSession(session.id)}
-                >
-                  {session.title || session.slug || session.id.slice(0, 8)}
-                </button>
-              ))
+      <div className="grid grid-cols-2 gap-4 mb-4 text-[10px] text-muted-foreground">
+        <div className="flex flex-col">
+          <span className="text-[8px] uppercase tracking-wider text-slate-500">Active Session</span>
+          <span className="text-secondary-foreground font-bold">{activeLabel}</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[8px] uppercase tracking-wider text-slate-500">System Ver</span>
+          <span className="text-secondary-foreground">{version}</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[8px] uppercase tracking-wider text-slate-500">Objectives</span>
+          <span className="text-secondary-foreground">{todoSummary}</span>
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <div className="text-[8px] uppercase tracking-wider text-slate-500 mb-2">Available Sessions</div>
+        <div className="flex flex-col max-h-[220px] overflow-y-auto pr-1 space-y-1">
+          {displaySessions.length === 0 ? (
+            <span className="text-muted-foreground text-[9px] italic">No active signals...</span>
+          ) : (
+            displaySessions.map((session) => (
+              <button
+                key={session.id}
+                type="button"
+                className={`session-item ${session.id === selectedSessionId ? "active" : ""}`}
+                onClick={() => onSelectSession(session.id)}
+              >
+                <span className="truncate">{session.title || session.slug || session.id.slice(0, 8)}</span>
+                {session.id === selectedSessionId && <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />}
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="pt-4 border-t border-slate-700">
+        <div className="text-[8px] uppercase tracking-wider text-slate-500 mb-2">Session Intel</div>
+        {selectedSession ? (
+          <div className="space-y-1.5">
+            <div className="flex flex-col">
+              <span className="text-[8px] text-slate-500">Identifier</span>
+              <span className="text-[9px] text-slate-300 break-all">{selectedSession.title || selectedSession.slug || "-"}</span>
+            </div>
+            {selectedSession.status && (
+              <div className="flex justify-between items-center">
+                <span className="text-[8px] text-slate-500">Status</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 inline-block">
+                  {selectedSession.status}
+                </span>
+              </div>
+            )}
+            {selectedSession.version && (
+              <div className="flex justify-between">
+                <span className="text-[8px] text-slate-500">Core Ver</span>
+                <span className="text-[9px] text-slate-400">{selectedSession.version}</span>
+              </div>
+            )}
+            {selectedSession.directory && (
+              <div className="flex flex-col mt-1">
+                <span className="text-[8px] text-slate-500">Path</span>
+                <span className="text-[8px] font-mono text-slate-500 truncate">{selectedSession.directory}</span>
+              </div>
             )}
           </div>
-        </div>
-
-        <div className="space-y-1">
-          <div className="text-[8px] uppercase tracking-[0.12em] text-[#24343a] mb-1.5">Context</div>
-          <span className="block text-[#4c6068] text-[9px]">Title: {selectedSession?.title || selectedSession?.slug || "-"}</span>
-          {selectedSession?.status && (
-            <span className="block text-[#4c6068] text-[9px]">Status: {selectedSession.status}</span>
-          )}
-          {selectedSession?.version && (
-            <span className="block text-[#4c6068] text-[9px]">Version: {selectedSession.version}</span>
-          )}
-          {selectedSession?.directory && (
-            <span className="block text-[#4c6068] text-[9px]">Dir: {selectedSession.directory}</span>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+        ) : (
+          <span className="text-[9px] text-slate-600 italic">No session selected</span>
+        )}
+      </div>
+    </div>
   );
 };
 

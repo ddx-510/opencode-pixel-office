@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "opencode-pixel-office": "bin/opencode-pixel-office.js"
+  },
   "scripts": {
     "start": "tsx server/index.ts",
     "dev:client": "vite --config client/vite.config.ts",

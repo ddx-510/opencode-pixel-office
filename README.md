@@ -2,49 +2,41 @@
 
 Pixel office visualization that listens to OpenCode plugin events and renders agent activity in real time.
 
-## Quick start
+## Project
 
-1. Install dependencies:
+Pixel Office is an OpenCode plugin that visualizes agent activity in a live office scene. It starts a local dashboard, streams OpenCode events, and renders agent state, messages, and movement in real time.
+
+## Installation
+
+See `docs/installation.md` for end‑user and LLM‑agent setup instructions.
+
+## Docs website
+
+Docs are served from GitHub Pages using `/docs`:
+
+`https://<your-username>.github.io/<your-repo>/`
+
+## Screenshots
+
+![Pixel Office overview](docs/assets/screenshot-1.png)
+![Agent activity and UI](docs/assets/screenshot-2.png)
+![Session panels](docs/assets/screenshot-3.png)
+
+## Credits
+
+Office tileset art: https://donarg.itch.io/officetileset
+
+## Maintainer guide
+
+### Local dev
 
 ```bash
 npm install
-```
-
-2. Build the client:
-
-```bash
 npm run build:client
-```
-
-3. Start the server:
-
-```bash
 npm start
 ```
 
-4. Open the UI:
-
-- Visit `http://localhost:3000`
-
-## OpenCode plugin setup
-
-1. Copy the plugin into your OpenCode plugin directory:
-
-```bash
-mkdir -p .opencode/plugins
-cp plugin/pixel-office.js .opencode/plugins/pixel-office.js
 ```
-
-2. (Optional) Change the target endpoint:
-
-```bash
-export PIXEL_OFFICE_URL="http://localhost:3000/events"
-```
-
-When the plugin loads, it will start the local Pixel Office server (if the
-endpoint is local) and open the dashboard in your default browser.
-
-OpenCode will load the plugin on startup and forward all events to the server.
 
 ## Event mapping
 

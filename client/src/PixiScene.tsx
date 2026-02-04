@@ -15,23 +15,13 @@ import { ActivityBubble } from "./components/pixi/ActivityBubble";
 import type { ActivityBubbleData } from "./components/pixi/ActivityBubble";
 import { MessageBubble } from "./components/pixi/MessageBubble";
 import type { MessageBubbleData } from "./components/pixi/MessageBubble";
+import { findPath } from "./pathfinding";
 import { drawRoundedRect } from "./components/pixi/drawRoundedRect";
 
 settings.SCALE_MODE = SCALE_MODES.NEAREST;
 settings.ROUND_PIXELS = true;
 
-type SpriteState = {
-  x: number;
-  y: number;
-  targetX: number;
-  targetY: number;
-  homeTile: { row: number; col: number };
-  direction: "front" | "back" | "left" | "right";
-  exiting?: boolean;
-  exitAt?: number;
-  goodbyeUntil?: number;
-  removeAt?: number;
-};
+
 
 type RenderableItem = { type: "agent"; id: string; y: number };
 
@@ -41,11 +31,61 @@ type DirectionFrames = {
   up: Texture[];
 };
 
+type SpriteState = {
+  x: number;
+  y: number;
+  targetX: number;
+  targetY: number;
+  homeTile: { row: number; col: number };
+  targetTile?: { row: number; col: number };
+  path?: { row: number; col: number }[];
+  pathIndex?: number;
+  targetKind?: "work" | "wander" | "exit";
+  retargetAt?: number;
+  dirLockUntil?: number;
+  wanderUntil?: number;
+  idlePauseUntil?: number;
+  workLockUntil?: number;
+  lastMoveAt?: number;
+  lastPosX?: number;
+  lastPosY?: number;
+  direction: "front" | "back" | "left" | "right";
+  exiting?: boolean;
+  exitAt?: number;
+  goodbyeUntil?: number;
+  removeAt?: number;
+};
+
 type SpriteSheets = {
   idle?: DirectionFrames;
   walk?: DirectionFrames;
   run?: DirectionFrames;
   jump?: DirectionFrames;
+};
+
+const TileMap = ({ map, textures }: { map: string[][]; textures: { [key: string]: Texture | null } }) => {
+  if (!map || !textures) return null;
+  const sprites: JSX.Element[] = [];
+
+  for (let r = 0; r < map.length; r++) {
+    for (let c = 0; c < map[r].length; c++) {
+      const type = map[r][c];
+
+      // Filter out transparent tiles for Overlay Mode
+      // We explicitly WANT "door_open" to render (as floor) to cover the background.
+      // We explicitly WANT "door_closed" (or partition) to render.
+      // We SKIP normal "floor" and "grass" to let background show.
+      if (!type || type === "grass" || type === "floor" || type === "path" || type === "carpet" || type === "window") {
+        continue;
+      }
+
+      const texture = textures[type];
+      if (texture) {
+        sprites.push(<Sprite key={`${r}-${c}`} texture={texture} x={c * TILE} y={r * TILE} />);
+      }
+    }
+  }
+  return <Container>{sprites}</Container>;
 };
 
 type PixiSceneProps = {
@@ -58,17 +98,15 @@ type PixiSceneProps = {
   onSelectAgent: (id: string | null) => void;
 };
 
-const TILE = 36;
-const WIDTH = 960;
-const HEIGHT = 540;
-const MAP_COLS = Math.floor(WIDTH / TILE);
-const MAP_ROWS = Math.floor(HEIGHT / TILE);
-const MEETING_ROOM = {
-  rowStart: 2,
-  rowEnd: 5,
-  colStart: 18,
-  colEnd: 23,
-};
+const TILE = 4;
+// Offset for grid alignment (if needed)
+const OFFSET_Y = 0;
+const OFFSET_X = 0;
+
+const DEFAULT_WIDTH = 960;
+const DEFAULT_HEIGHT = 540;
+const DEFAULT_MAP_COLS = Math.floor(DEFAULT_WIDTH / TILE);
+const DEFAULT_MAP_ROWS = Math.floor(DEFAULT_HEIGHT / TILE);
 
 const COLORS = {
   grass: 0xa8d070,
@@ -106,21 +144,6 @@ const AVATAR_COLORS = [
   0xf7b978,
 ];
 
-const OFFICE_AREA = {
-  colStart: 1,
-  colEnd: 24,
-  rowStart: 1,
-  rowEnd: 12,
-};
-
-const DESK_LAYOUT = {
-  rows: 3,
-  cols: 4,
-  origin: { col: 3, row: 4 },
-  colStep: 3,
-  rowStep: 3,
-};
-
 const MESSAGE_TTL_MS = 3000;
 const TYPING_TTL_MS = 800;
 const MESSAGE_MAX_WIDTH = 140;
@@ -157,176 +180,94 @@ const GOODBYE_TTL_MS = 1400;
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
-const buildDeskTiles = () => {
-  const tiles = [] as { row: number; col: number; index: number }[];
-  let index = 0;
-  for (let row = 0; row < DESK_LAYOUT.rows; row += 1) {
-    for (let col = 0; col < DESK_LAYOUT.cols; col += 1) {
-      tiles.push({
-        row: DESK_LAYOUT.origin.row + row * DESK_LAYOUT.rowStep,
-        col: DESK_LAYOUT.origin.col + col * DESK_LAYOUT.colStep,
-        index,
-      });
-      index += 1;
-    }
+const hashId = (value: string) => {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) % 997;
   }
-  return tiles;
+  return hash;
 };
 
-const buildTileMap = (deskTiles: { row: number; col: number }[]) => {
-  const map = Array.from({ length: MAP_ROWS }, () =>
-    Array.from({ length: MAP_COLS }, () => "grass")
-  );
-
-  for (let row = OFFICE_AREA.rowStart; row <= OFFICE_AREA.rowEnd; row += 1) {
-    for (let col = OFFICE_AREA.colStart; col <= OFFICE_AREA.colEnd; col += 1) {
-      map[row][col] = "floor";
-    }
+const pickNode = (id: string, nodes: { row: number; col: number }[], fallback: { row: number; col: number }) => {
+  if (!nodes || nodes.length === 0) {
+    return fallback;
   }
+  return nodes[hashId(id) % nodes.length];
+};
 
-  for (let col = OFFICE_AREA.colStart; col <= OFFICE_AREA.colEnd; col += 1) {
-    map[OFFICE_AREA.rowStart][col] = "wall_face";
-    map[OFFICE_AREA.rowEnd][col] = "partition_h_top";
-  }
-  for (let row = OFFICE_AREA.rowStart; row <= OFFICE_AREA.rowEnd; row += 1) {
-    map[row][OFFICE_AREA.colStart] = "partition_v_right";
-    map[row][OFFICE_AREA.colEnd] = "partition_v_left";
-  }
-  // Rounded Corners
-  map[OFFICE_AREA.rowEnd][OFFICE_AREA.colStart] = "corner_bl";
-  map[OFFICE_AREA.rowEnd][OFFICE_AREA.colEnd] = "corner_br";
+const nodeKey = (row: number, col: number) => `${row},${col}`;
+const EXIT_OFFSET_X = 12;
+const EXIT_OFFSET_Y = -4;
+const EXIT_RADIUS = 2;
 
-  const doorCol = Math.floor((OFFICE_AREA.colStart + OFFICE_AREA.colEnd) / 2);
-  map[OFFICE_AREA.rowEnd][doorCol] = "floor";
+const pickExitTarget = (
+  current: { row: number; col: number },
+  exitNodes: { row: number; col: number }[],
+  grid: number[][]
+) => {
+  const inBounds = (row: number, col: number) =>
+    row >= 0 && col >= 0 && row < grid.length && col < grid[0].length;
+  const isWalkable = (row: number, col: number) => grid[row][col] > 0;
 
-  for (let row = OFFICE_AREA.rowEnd + 1; row < MAP_ROWS; row += 1) {
-    for (let col = doorCol - 1; col <= doorCol + 1; col += 1) {
-      if (col >= 0 && col < MAP_COLS) {
-        map[row][col] = "path";
-      }
-    }
-  }
+  let best = exitNodes[0] || current;
+  let bestDist = Number.POSITIVE_INFINITY;
 
-  for (let col = OFFICE_AREA.colStart + 2; col < OFFICE_AREA.colEnd; col += 4) {
-    map[OFFICE_AREA.rowStart][col] = "window";
-  }
-
-  // Add Bookshelves
-  map[OFFICE_AREA.rowStart][OFFICE_AREA.colStart + 1] = "bookshelf";
-  map[OFFICE_AREA.rowStart][OFFICE_AREA.colEnd - 1] = "bookshelf";
-  map[OFFICE_AREA.rowStart][OFFICE_AREA.colStart + 5] = "bookshelf";
-  map[OFFICE_AREA.rowStart][OFFICE_AREA.colEnd - 5] = "bookshelf";
-
-  const partitionRows = [3, 6, 9];
-  partitionRows.forEach((pRow) => {
-    if (pRow > OFFICE_AREA.rowStart && pRow < OFFICE_AREA.rowEnd) {
-      for (let col = 3; col <= 11; col += 1) {
-        if (map[pRow][col] === "floor") {
-          map[pRow][col] = "wall_face"; // Interior partitions use same face style
+  exitNodes.forEach((node) => {
+    for (let dr = -EXIT_RADIUS; dr <= EXIT_RADIUS; dr += 1) {
+      for (let dc = -EXIT_RADIUS; dc <= EXIT_RADIUS; dc += 1) {
+        const row = node.row + dr;
+        const col = node.col + dc;
+        if (!inBounds(row, col)) continue;
+        if (!isWalkable(row, col)) continue;
+        const dist = Math.abs(row - current.row) + Math.abs(col - current.col);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = { row, col };
         }
       }
     }
   });
 
-  const partitionCols = [7, 11];
-  partitionCols.forEach((pCol) => {
-    for (let row = 3; row <= 10; row += 1) {
-      if (map[row][pCol] === "floor") {
-        map[row][pCol] = "partition_v";
-      }
-    }
-  });
-
-  deskTiles.forEach((tile) => {
-    map[tile.row][tile.col] = "desk";
-  });
-
-  for (let row = MEETING_ROOM.rowStart; row <= MEETING_ROOM.rowEnd; row += 1) {
-    for (let col = MEETING_ROOM.colStart; col <= MEETING_ROOM.colEnd; col += 1) {
-      map[row][col] = "carpet";
-    }
-  }
-  for (let col = MEETING_ROOM.colStart; col <= MEETING_ROOM.colEnd; col += 1) {
-    map[MEETING_ROOM.rowEnd][col] = "partition_h_top";
-  }
-  for (let row = MEETING_ROOM.rowStart; row <= MEETING_ROOM.rowEnd; row += 1) {
-    map[row][MEETING_ROOM.colStart] = "partition_v"; // Interior vertical wall
-  }
-  map[MEETING_ROOM.rowEnd][MEETING_ROOM.colStart] = "corner_bl"; // Corner for meeting room
-  map[3][20] = "table";
-  map[3][21] = "table";
-  map[4][20] = "table";
-  map[4][21] = "table";
-
-  const plants = [
-    { row: 2, col: 2 },
-    { row: 2, col: 17 },
-    { row: 11, col: 2 },
-    { row: 7, col: 23 },
-    { row: 11, col: 16 },
-  ];
-  plants.forEach((plant) => {
-    map[plant.row][plant.col] = "plant";
-  });
-
-  map[6][15] = "cooler";
-
-  return map;
+  return best;
 };
 
-const deskTiles = buildDeskTiles();
-const tileMap = buildTileMap(deskTiles);
-
-const isWalkable = (col: number, row: number) => {
-  if (col < 0 || row < 0 || col >= MAP_COLS || row >= MAP_ROWS) {
-    return false;
+const simplifyPath = (path: { row: number; col: number }[]) => {
+  if (path.length <= 2) {
+    return path;
   }
-  const type = tileMap[row][col];
-  return type === "grass" || type === "floor" || type === "path";
-};
-
-const walkableTiles = (() => {
-  const tiles: { col: number; row: number }[] = [];
-  for (let row = 0; row < MAP_ROWS; row += 1) {
-    for (let col = 0; col < MAP_COLS; col += 1) {
-      if (isWalkable(col, row)) {
-        tiles.push({ col, row });
-      }
+  const result: { row: number; col: number }[] = [path[0]];
+  let prev = path[0];
+  let prevDir = {
+    row: path[1].row - prev.row,
+    col: path[1].col - prev.col,
+  };
+  for (let i = 1; i < path.length - 1; i += 1) {
+    const current = path[i];
+    const next = path[i + 1];
+    const dir = { row: next.row - current.row, col: next.col - current.col };
+    if (dir.row !== prevDir.row || dir.col !== prevDir.col) {
+      result.push(current);
+      prevDir = dir;
     }
+    prev = current;
   }
-  return tiles;
-})();
+  result.push(path[path.length - 1]);
+  return result;
+};
 
 const tileToPixel = (tile: { col: number; row: number }) => ({
-  x: tile.col * TILE + TILE / 2,
-  y: tile.row * TILE + TILE / 2,
+  x: tile.col * TILE + TILE / 2 + OFFSET_X,
+  y: tile.row * TILE + TILE / 2 + OFFSET_Y,
 });
 
-const pickRandomWalkable = () =>
-  walkableTiles[Math.floor(Math.random() * walkableTiles.length)];
-
-const pickWanderTile = (homeTile: { row: number; col: number }, radius: number) => {
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    const row = clamp(
-      homeTile.row + Math.floor(Math.random() * (radius * 2 + 1)) - radius,
-      1,
-      MAP_ROWS - 2
-    );
-    const col = clamp(
-      homeTile.col + Math.floor(Math.random() * (radius * 2 + 1)) - radius,
-      1,
-      MAP_COLS - 2
-    );
-    if (isWalkable(col, row)) {
-      return { row, col };
-    }
-  }
-  return pickRandomWalkable();
-};
+const pixelToTile = (x: number, y: number) => ({
+  col: Math.round((x - OFFSET_X - TILE / 2) / TILE),
+  row: Math.round((y - OFFSET_Y - TILE / 2) / TILE),
+});
 
 const doorTile = () => {
-  const doorCol = Math.floor((OFFICE_AREA.colStart + OFFICE_AREA.colEnd) / 2);
-  return { row: OFFICE_AREA.rowEnd + 1, col: doorCol };
+  // Fallback to center of default layout (48, 48)
+  return { row: 48 * 2, col: 48 * 2 };
 };
 
 const statusSpeed = (status: string) => {
@@ -444,39 +385,31 @@ const buildTileTexture = (type: string) => {
   switch (type) {
     case "grass":
       drawRect("#a8d070", 0, 0, TILE, TILE);
-      drawRect("#b7de7c", 0, 0, TILE, 2);
-      drawRect("#8bb85f", 0, TILE - 6, TILE, 6);
-      drawRect("#7aa44f", 0, TILE - 2, TILE, 2);
-      drawRect("#96c86a", 4, 4, 4, 4);
-      drawRect("#96c86a", 18, 12, 4, 4);
+      drawRect("#b7de7c", 0, 0, TILE, 4);
+      drawRect("#8bb85f", 0, TILE - 12, TILE, 12);
+      drawRect("#7aa44f", 0, TILE - 4, TILE, 4);
+      drawRect("#96c86a", 8, 8, 8, 8);
+      drawRect("#96c86a", 36, 24, 8, 8);
       break;
     case "path":
       drawRect("#d4c4a8", 0, 0, TILE, TILE);
-      drawRect("#e4d7bf", 0, 0, TILE, 2);
-      drawRect("#bfae94", 0, TILE - 5, TILE, 5);
-      drawRect("#ac9b82", 0, TILE - 2, TILE, 2);
-      drawRect("#c9b89e", 6, 6, 4, 4);
-      drawRect("#c9b89e", 20, 14, 4, 4);
-      break;
-    case "floor":
-      drawRect("#e8dcc8", 0, 0, TILE, TILE);
-      drawRect("#f3ead9", 0, 0, TILE, 2);
-      drawRect("#d9ccb5", 0, TILE - 2, TILE, 2);
-      drawRect("#c7b59f", 0, TILE - 1, TILE, 1);
-      drawRect("#f0e6d6", 2, 2, 2, 2);
-      drawRect("#f0e6d6", 18, 18, 2, 2);
+      drawRect("#e4d7bf", 0, 0, TILE, 4);
+      drawRect("#bfae94", 0, TILE - 10, TILE, 10);
+      drawRect("#ac9b82", 0, TILE - 4, TILE, 4);
+      drawRect("#c9b89e", 12, 12, 8, 8);
+      drawRect("#c9b89e", 40, 28, 8, 8);
       break;
     case "wall_face":
       // Top Cap (Partition style) - Height 10
-      drawRect("#4a4a5c", 0, 0, TILE, 10);
-      drawRect("#5a5a6e", 0, 0, TILE, 2);
-      drawRect("#3a3a4a", 0, 8, TILE, 2);
+      drawRect("#4a4a5c", 0, 0, TILE, 20);
+      drawRect("#5a5a6e", 0, 0, TILE, 4);
+      drawRect("#3a3a4a", 0, 16, TILE, 4);
 
       // Wall Face - Middle
-      drawRect("#6e6e82", 0, 10, TILE, TILE - 14);
+      drawRect("#6e6e82", 0, 20, TILE, TILE - 28);
 
       // Baseboard - Bottom 4
-      drawRect("#4a4a5c", 0, TILE - 4, TILE, 4);
+      drawRect("#4a4a5c", 0, TILE - 8, TILE, 8);
       break;
     case "partition_h":
     case "partition_h_top":
@@ -486,21 +419,21 @@ const buildTileTexture = (type: string) => {
       } else {
         // partition_h_top: Wall at top, Void below
         // Wall is 0..12. Void is 12..32
-        drawRect("#121212", 0, 12, TILE, TILE - 12);
+        drawRect("#121212", 0, 24, TILE, TILE - 24);
       }
 
-      const phH = 12;
+      const phH = 24;
       const phY = type === "partition_h_top" ? 0 : (TILE - phH) / 2;
 
       drawRect("#4a4a5c", 0, phY, TILE, phH); // Dark base
-      drawRect("#5a5a6e", 0, phY + 2, TILE, phH - 4); // Lighter top surface
-      drawRect("#3a3a4a", 0, phY + phH - 2, TILE, 2); // Shadow on bottom
+      drawRect("#5a5a6e", 0, phY + 4, TILE, phH - 8); // Lighter top surface
+      drawRect("#3a3a4a", 0, phY + phH - 4, TILE, 4); // Shadow on bottom
       break;
     case "partition_v":
     case "partition_v_left":
     case "partition_v_right":
       // Thin vertical partition strip
-      const pvW = 12;
+      const pvW = 24;
       let pvX = (TILE - pvW) / 2;
       if (type === "partition_v_left") pvX = 0;
       if (type === "partition_v_right") pvX = TILE - pvW;
@@ -509,210 +442,29 @@ const buildTileTexture = (type: string) => {
         drawRect("#e8dcc8", 0, 0, TILE, TILE); // Floor Background for internal
       } else if (type === "partition_v_left") {
         // Wall at Left (0..12). Void at Right (12..32)
-        drawRect("#121212", 12, 0, TILE - 12, TILE);
+        drawRect("#121212", 24, 0, TILE - 24, TILE);
       } else if (type === "partition_v_right") {
         // Wall at Right (20..32). Void at Left (0..20)
-        drawRect("#121212", 0, 0, TILE - 12, TILE);
+        drawRect("#121212", 0, 0, TILE - 24, TILE);
       }
 
       drawRect("#4a4a5c", pvX, 0, pvW, TILE); // Dark base
-      drawRect("#5a5a6e", pvX + 2, 0, pvW - 4, TILE); // Lighter top surface
-      drawRect("#3a3a4a", pvX + pvW - 2, 0, 2, TILE); // Shadow on right
+      drawRect("#5a5a6e", pvX + 4, 0, pvW - 8, TILE); // Lighter top surface
+      drawRect("#3a3a4a", pvX + pvW - 4, 0, 4, TILE); // Shadow on right
       break;
-    case "corner_bl":
-      // Bottom-Left Rounded Corner
-      // Meets 'partition_v_right' (West wall, wall at right) and 'partition_h_top' (South wall, wall at top)
-      // Corner is Top-Right of this tile
-      {
-        const w = 12;
-        const r = 12;
-        // Draw Arc
-        ctx.beginPath();
-        ctx.moveTo(TILE, w);
-        ctx.arc(TILE, 0, TILE - (TILE - w), Math.PI / 2, Math.PI); // Incorrect math?
-        // Simpler: Draw 2 rectangles and use arc for the join?
-        // Draw Top Horiz Part
-        drawRect("#4a4a5c", TILE - w, 0, w, w); // Fill corner square first
-
-        // We want a curve from (TILE-12, something) to (something, 12).
-        // Let's just make it a sharp corner for now to ensure alignment, 
-        // then round it if requested strictly. User said "make it rounded".
-        // Okay, let's try a proper rounded path.
-        ctx.clearRect(0, 0, TILE, TILE); // Clear
-        ctx.fillStyle = "#121212"; // Void
-        ctx.fillRect(0, 0, TILE, TILE);
-
-        ctx.fillStyle = "#4a4a5c";
-        ctx.beginPath();
-        ctx.moveTo(TILE, 0);
-        ctx.lineTo(TILE, 12);
-        ctx.arcTo(TILE - 12, 12, TILE - 12, 0, 12); // Inner curve?
-        ctx.lineTo(TILE - 12, 0);
-        ctx.fill();
-
-        // Proper Rounded Corner Logic:
-        // Connect Vertical (x=24..36) to Horizontal (y=0..12)
-        // Outer corner is (36,0) [Top Right of tile]
-        // Inner corner is (24,12)
-
-        // Outer Arc (Radius 12) centered at (24, 0)?
-        // If center is (24,0), radius 12 goes from (36,0) to (24,12). That's an arc.
-        ctx.beginPath();
-        ctx.moveTo(TILE, 0); // Start at Top Right
-        ctx.arc(TILE - 12, 0, 12, 0, Math.PI / 2); // Arc to (24, 12)
-        ctx.lineTo(TILE - 12, 0); // Close to center
-        ctx.fill();
-
-        // Highlight
-        ctx.fillStyle = "#5a5a6e";
-        ctx.beginPath();
-        ctx.moveTo(TILE, 0);
-        ctx.arc(TILE - 12, 0, 10, 0, Math.PI / 2);
-        ctx.lineTo(TILE - 12, 0);
-        ctx.fill();
-      }
-      break;
-    case "corner_br":
-      // Bottom-Right Rounded Corner
-      // Meets 'partition_v_left' (East wall, wall at left) and 'partition_h_top' (South wall, wall at top)
-      // Intersection is Top-Left of this tile (0,0) to (12,12)
-      {
-        ctx.fillStyle = "#4a4a5c";
-        ctx.beginPath();
-        ctx.moveTo(0, 0); // Top Left
-        // Center at (12, 0)
-        ctx.arc(12, 0, 12, Math.PI, Math.PI / 2, true); // Arc from (0,0) to (12, 12) ??
-        // Arc angles: 0 is Right. PI is Left. PI/2 is Down.
-        // We want arc from Left (0,0) -> Down (12,12).
-        // Center (12,0). radius 12.
-        // Angle PI (at x=0) to PI/2 (at y=12).
-        ctx.arc(12, 0, 12, Math.PI, Math.PI / 2, true);
-        ctx.lineTo(12, 0);
-        ctx.fill();
-
-        // Highlight
-        ctx.fillStyle = "#5a5a6e";
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.arc(12, 0, 10, Math.PI, Math.PI / 2, true);
-        ctx.lineTo(12, 0);
-        ctx.fill();
-      }
-      break;
-    case "window":
-      // Sits on top of wall_h, so replicate wall bg
-      drawRect("#4a4a5c", 0, 0, TILE, 10);
-      drawRect("#5a5a6e", 0, 0, TILE, 2);
-      drawRect("#3a3a4a", 0, 8, TILE, 2);
-      drawRect("#6e6e82", 0, 10, TILE, TILE - 14);
-      drawRect("#4a4a5c", 0, TILE - 4, TILE, 4);
-
-      // Window Glass
-      drawRect("#a8d8ea", 6, 6, TILE - 12, TILE - 16);
-      drawRect("#c5e8f5", 8, 8, TILE - 18, 3);
-      drawRect("#8faab5", 6, 6, TILE - 12, 1); // Frame top
-      drawRect("#8faab5", 6, TILE - 10, TILE - 12, 1); // Frame bottom
-      break;
-    case "desk":
-      drawRect("#e8dcc8", 0, 0, TILE, TILE); // Floor
-
-      // Exaggerated 3D Desk
-      const dTopH = 22; // Deeper Top
-      drawRect("#8d6b4f", 2, 2, TILE - 4, dTopH); // Main Top
-      drawRect("#a6856a", 2, 2, TILE - 4, 3); // Back highlight edge
-
-      // Front Face (Shifted down)
-      drawRect("#75543d", 2, 2 + dTopH, TILE - 4, 6); // Short front panel
-
-      // Legs
-      drawRect("#5c4330", 2, 2 + dTopH, 3, 8); // Left
-      drawRect("#5c4330", TILE - 5, 2 + dTopH, 3, 8); // Right
-
-      // Large Monitor
-      // Stand
-      drawRect("#1a1a1a", 14, 8, 4, 6);
-      drawRect("#1a1a1a", 12, 14, 8, 2); // Base
-
-      // Screen (Floating high)
-      drawRect("#1a1a1a", 6, 2, 20, 12); // Bezel
-      drawRect("#2b2b3b", 8, 4, 16, 8); // Screen Off dark
-      drawRect("#4a90e2", 10, 5, 4, 4); // "On" reflection/glare
-
-      // Papers
-      drawRect("#f0f0f0", 4, 18, 5, 5);
-      break;
-    case "table":
-      drawRect("#e8dcc8", 0, 0, TILE, TILE); // Floor
-
-      // Exaggerated 3D Table
-      const tTopH = 20;
-      drawRect("#8d6b4f", 4, 4, TILE - 8, tTopH);
-      drawRect("#a6856a", 6, 6, TILE - 12, tTopH - 6);
-
-      // Front Face
-      drawRect("#5c4330", 4, 4 + tTopH, TILE - 8, 4);
-
-      // Legs
-      drawRect("#3e2b1e", 6, 4 + tTopH + 2, 3, 6);
-      drawRect("#3e2b1e", TILE - 9, 4 + tTopH + 2, 3, 6);
-      break;
-    case "bookshelf":
-      // Wall Background
-      drawRect("#4a4a5c", 0, 0, TILE, 10);
-      drawRect("#6e6e82", 0, 10, TILE, TILE - 14);
-      drawRect("#4a4a5c", 0, TILE - 4, TILE, 4);
-
-      // Deep Top Cap + Shelf Face
-      const bsY = 4; // Higher up
-      const bsTopH = 8; // Visible top depth
-      const bsW = TILE - 6;
-      const bsX = 3;
-
-      // Top Surface
-      drawRect("#5c4330", bsX, bsY, bsW, bsTopH);
-      drawRect("#75543d", bsX, bsY, bsW, 2); // Highlight
-
-      // Front Face (Shelves) - Starts below top
-      const shelfY = bsY + bsTopH;
-      const shelfH = TILE - shelfY - 2;
-      drawRect("#3e2b1e", bsX, shelfY, bsW, shelfH); // Inner shadow
-
-      // Shelves
-      drawRect("#8d6b4f", bsX + 2, shelfY + 6, bsW - 4, 2);
-      drawRect("#8d6b4f", bsX + 2, shelfY + 14, bsW - 4, 2);
-
-      // Books
-      const bsBooks = ["#a83232", "#32a852", "#3262a8", "#a8a832", "#a832a8"];
-      for (let i = 0; i < 4; i++) {
-        drawRect(bsBooks[i % bsBooks.length], bsX + 4 + i * 5, shelfY + 1, 3, 5);
-        drawRect(bsBooks[(i + 2) % bsBooks.length], bsX + 4 + i * 5, shelfY + 9, 3, 5);
-      }
-      break;
-    case "carpet":
-      drawRect("#6b8e9f", 0, 0, TILE, TILE);
-      drawRect("#7fa5b7", 0, 0, TILE, 2);
-      drawRect("#5a7d8e", 0, TILE - 4, TILE, 4);
-      drawRect("#4e6d7c", 0, TILE - 2, TILE, 2);
-      drawRect("#7a9eb0", 4, 4, 3, 3);
-      drawRect("#7a9eb0", 20, 16, 3, 3);
-      break;
-    case "plant":
+    case "floor":
       drawRect("#e8dcc8", 0, 0, TILE, TILE);
-      drawRect("#6b4423", 12, 20, 12, 10);
-      drawRect("#7d5530", 12, 20, 12, 2);
-      drawRect("#3a8a4d", 8, 8, 20, 14);
-      drawRect("#5cb86c", 12, 10, 6, 6);
-      drawRect("#2d7040", 18, 12, 4, 4);
+      drawRect("#f3ead9", 0, 0, TILE, 4);
+      drawRect("#d9ccb5", 0, TILE - 4, TILE, 4);
+      drawRect("#c7b59f", 0, TILE - 2, TILE, 2);
+      drawRect("#f0e6d6", 4, 4, 4, 4);
+      drawRect("#f0e6d6", 36, 36, 4, 4);
       break;
-    case "cooler":
-      drawRect("#e8dcc8", 0, 0, TILE, TILE);
-      drawRect("#d0d8e0", 10, 8, 16, 22);
-      drawRect("#e8f0f5", 10, 8, 16, 2);
-      drawRect("#e8f0f5", 12, 10, 12, 8);
-      drawRect("#4a90b8", 14, 12, 8, 4);
-      break;
+
+
     default:
-      drawRect("#a8d070", 0, 0, TILE, TILE);
+      // Empty transparency for default
+      ctx.clearRect(0, 0, TILE, TILE);
   }
   const texture = Texture.from(canvas);
   texture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
@@ -769,6 +521,7 @@ const TitleBadge = ({ x, y }: { x: number; y: number }) => {
   );
 };
 
+// SceneLayer now accepts dims props to handle logic that depends on map size
 const SceneLayer = ({
   agents,
   interactions,
@@ -777,37 +530,241 @@ const SceneLayer = ({
   lastTodoSummary,
   selectedAgentId,
   onSelectAgent,
-}: PixiSceneProps) => {
+  sceneWidth,
+  sceneHeight,
+  setDimensions,
+}: PixiSceneProps & { sceneWidth: number; sceneHeight: number; setDimensions: (d: { width: number; height: number }) => void }) => {
   const [frame, setFrame] = useState(0);
   const timeRef = useRef(0);
   const spritesRef = useRef<Map<string, SpriteState>>(new Map());
   const agentCacheRef = useRef<Map<string, Agent>>(new Map());
   const [spriteSheets, setSpriteSheets] = useState<SpriteSheets>({});
+
+  const [tileMap, setTileMap] = useState<string[][]>(() =>
+    Array.from({ length: DEFAULT_MAP_ROWS }, () =>
+      Array.from({ length: DEFAULT_MAP_COLS }, () => "")
+    )
+  );
+  // Collision State
+  const [collisionMap, setCollisionMap] = useState<{
+    rows: number;
+    cols: number;
+    grid: number[][];
+    workNodes: { row: number, col: number }[];
+    workCenters: { row: number, col: number }[];
+    doorNodes: { row: number, col: number }[];
+    exitNodes: { row: number, col: number }[];
+  } | null>(null);
+
+  // Helper to check walkability
+  const isWalkable = (col: number, row: number) => {
+    if (!collisionMap) {
+      return col >= 0 && row >= 0 && row < DEFAULT_MAP_ROWS && col < DEFAULT_MAP_COLS;
+    }
+    if (col < 0 || row < 0 || col >= collisionMap.cols || row >= collisionMap.rows) return false;
+    // Walkable if state > 0. (1=Floor, 2=Work, 3=Rest, 4=Door)
+    return collisionMap.grid[row][col] > 0;
+  };
+
+  const getRandomWalkable = (allowChairs: boolean) => {
+    if (!collisionMap) return { row: 32, col: 32 };
+      for (let i = 0; i < 80; i++) {
+        const r = Math.floor(Math.random() * collisionMap.rows);
+        const c = Math.floor(Math.random() * collisionMap.cols);
+        const state = collisionMap.grid[r][c];
+        if (state <= 0) continue;
+        if (!allowChairs && state === 2) continue;
+        return { row: r, col: c };
+      }
+    return { row: 32, col: 32 };
+  };
+
+  // Load Collision Image
+  useEffect(() => {
+    const img = new Image();
+    img.src = "/office_floor.png";
+    img.onload = () => {
+      const w = img.width;
+      const h = img.height;
+      setDimensions({ width: w, height: h }); // Update Stage Size
+
+      // Generate Grid
+      const cols = Math.floor(w / TILE);
+      const rows = Math.floor(h / TILE);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0);
+      const pixels = ctx.getImageData(0, 0, w, h).data;
+
+      const newGrid: number[][] = [];
+      for (let r = 0; r < rows; r++) {
+        const rowArr: number[] = [];
+        for (let c = 0; c < cols; c++) {
+          // Consensus Strategy: Scan the tile with a fine grid (2px steps)
+          // Total 8x8 Tile area (16 samples).
+
+          let transparentSamples = 0;
+          let blueSamples = 0;   // Work Chair #0000FF
+          let greenSamples = 0;  // Door #00FF00
+          let redSamples = 0;    // Exit #FF0000
+          let totalSamples = 0;
+          const px = c * TILE;
+          const py = r * TILE;
+
+          // Scan interior
+          for (let sy = 1; sy < TILE; sy += 2) {
+            for (let sx = 1; sx < TILE; sx += 2) {
+              const sampleX = px + sx;
+              const sampleY = py + sy;
+
+              if (sampleX < 0 || sampleX >= w || sampleY < 0 || sampleY >= h) {
+                totalSamples++;
+                continue;
+              }
+
+              const idx = (Math.floor(sampleY) * w + Math.floor(sampleX)) * 4;
+              if (idx >= 0 && idx < pixels.length) {
+                const r = pixels[idx];
+                const g = pixels[idx + 1];
+                const b = pixels[idx + 2];
+                const a = pixels[idx + 3];
+
+                // Color Detection
+                if (b > 200 && r < 50 && g < 50) { // Blue (Work Chair)
+                  blueSamples++;
+                } else if (g > 200 && r < 50 && b < 50) { // Green (Door)
+                  greenSamples++;
+                } else if (r > 200 && g < 50 && b < 50) { // Red (Exit)
+                  redSamples++;
+                } else if (a < 50) {
+                  transparentSamples++;
+                }
+              }
+              totalSamples++;
+            }
+          }
+
+          const blueRatio = totalSamples > 0 ? blueSamples / totalSamples : 0;
+          const greenRatio = totalSamples > 0 ? greenSamples / totalSamples : 0;
+          const redRatio = totalSamples > 0 ? redSamples / totalSamples : 0;
+          const ratio = totalSamples > 0 ? transparentSamples / totalSamples : 0;
+
+          // State Priority:
+          // 5 = Exit (Red)
+          // 4 = Door (Green)
+          // 2 = Work Chair (Blue)
+          // 1 = Floor (Transparent)
+          // 0 = Blocked (Default + Yellow)
+          let state = 0;
+          if (redRatio > 0.3) state = 5;
+          else if (greenRatio > 0.3) state = 4;
+          else if (blueRatio > 0.3) state = 2;
+          else if (ratio > 0.6) state = 1;
+
+          rowArr.push(state);
+        }
+        newGrid.push(rowArr);
+      }
+
+      // Post-Process: Collect Nodes
+      const workNodes: { row: number, col: number }[] = [];
+      const workCenters: { row: number, col: number }[] = [];
+      const doorNodes: { row: number, col: number }[] = [];
+      const exitNodes: { row: number, col: number }[] = [];
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const s = newGrid[r][c];
+          if (s === 2) workNodes.push({ row: r, col: c });
+          if (s === 4) doorNodes.push({ row: r, col: c });
+          if (s === 5) exitNodes.push({ row: r, col: c });
+        }
+      }
+
+      // Compute work chair centers (connected regions)
+      const visited = Array.from({ length: rows }, () =>
+        Array.from({ length: cols }, () => false)
+      );
+      const inBounds = (r: number, c: number) => r >= 0 && c >= 0 && r < rows && c < cols;
+      const deltas = [
+        { row: 1, col: 0 },
+        { row: -1, col: 0 },
+        { row: 0, col: 1 },
+        { row: 0, col: -1 },
+      ];
+      for (let r = 0; r < rows; r += 1) {
+        for (let c = 0; c < cols; c += 1) {
+          if (visited[r][c] || newGrid[r][c] !== 2) continue;
+          const stack = [{ row: r, col: c }];
+          const cluster: { row: number; col: number }[] = [];
+          visited[r][c] = true;
+          while (stack.length > 0) {
+            const node = stack.pop();
+            if (!node) break;
+            cluster.push(node);
+            deltas.forEach((d) => {
+              const nr = node.row + d.row;
+              const nc = node.col + d.col;
+              if (!inBounds(nr, nc)) return;
+              if (visited[nr][nc]) return;
+              if (newGrid[nr][nc] !== 2) return;
+              visited[nr][nc] = true;
+              stack.push({ row: nr, col: nc });
+            });
+          }
+          if (cluster.length > 0) {
+            const avgRow = cluster.reduce((sum, n) => sum + n.row, 0) / cluster.length;
+            const avgCol = cluster.reduce((sum, n) => sum + n.col, 0) / cluster.length;
+            let best = cluster[0];
+            let bestDist = Number.POSITIVE_INFINITY;
+            cluster.forEach((n) => {
+              const dist = Math.abs(n.row - avgRow) + Math.abs(n.col - avgCol);
+              if (dist < bestDist) {
+                bestDist = dist;
+                best = n;
+              }
+            });
+            workCenters.push(best);
+          }
+        }
+      }
+
+      // Initialize Door Visuals
+      // We need to update the tileMap to show "closed door" (partition_v) where green pixels are
+      // But only if we want them to start closed.
+      setTileMap(() => {
+        const base = Array.from({ length: rows }, () =>
+          Array.from({ length: cols }, () => "")
+        );
+        doorNodes.forEach(node => {
+          if (node.row < base.length && node.col < base[0].length) {
+            base[node.row][node.col] = "door_closed";
+          }
+        });
+        return base;
+      });
+
+      setCollisionMap({ rows, cols, grid: newGrid, workNodes, workCenters, doorNodes, exitNodes });
+      console.log("Generated Collision Map", { width: w, height: h, rows, cols });
+    };
+  }, []); // Run once
+
+  // ... (rest of component, replacing usage of globals with local helpers)
+
   const tileTextures = useMemo(() => {
     const types = [
-      "grass",
-      "path",
       "floor",
-      "wall_face",
-      "partition_h",
-      "partition_h_top",
-      "partition_v",
-      "partition_v_left",
-      "partition_v_right",
-      "corner_bl",
-      "corner_br",
-      "window",
-      "desk",
-      "table",
-      "carpet",
-      "plant",
-      "bookshelf",
-      "cooler",
     ];
     const textures: Record<string, Texture | null> = {};
     types.forEach((type) => {
       textures[type] = buildTileTexture(type);
     });
+    // Dynamic Door Aliases
+    textures["door_open"] = textures["floor"];
+    textures["door_closed"] = null; // No visual, show background
     return textures;
   }, []);
   const activeSession = useMemo(
@@ -916,6 +873,7 @@ const SceneLayer = ({
     const agentCache = agentCacheRef.current;
     const now = Date.now();
     const ids = new Set(agents.map((agent) => agent.id));
+    const exitNode = collisionMap?.exitNodes?.[0] ?? doorTile();
     agents.forEach((agent) => {
       agentCache.set(agent.id, agent);
     });
@@ -923,15 +881,25 @@ const SceneLayer = ({
       if (!ids.has(id)) {
         const existing = spriteMap.get(id);
         if (existing && !existing.exiting) {
-          const exitTarget = tileToPixel(doorTile());
+          const targetTile = collisionMap
+            ? pickExitTarget(pixelToTile(existing.x, existing.y), collisionMap.exitNodes, collisionMap.grid)
+            : exitNode;
+          const baseTarget = tileToPixel(targetTile);
+          const exitTarget = { x: baseTarget.x + EXIT_OFFSET_X, y: baseTarget.y + EXIT_OFFSET_Y };
           spriteMap.set(id, {
             ...existing,
             exiting: true,
             exitAt: now,
-            goodbyeUntil: now + GOODBYE_TTL_MS,
-            removeAt: now + EXIT_TTL_MS,
+            goodbyeUntil: undefined,
+            removeAt: undefined,
             targetX: exitTarget.x,
             targetY: exitTarget.y,
+            targetKind: "exit",
+            targetTile: targetTile,
+            path: collisionMap
+              ? simplifyPath(findPath(collisionMap.grid, pixelToTile(existing.x, existing.y), targetTile))
+              : [],
+            pathIndex: 1,
             direction: "front",
           });
         }
@@ -941,93 +909,359 @@ const SceneLayer = ({
       if (spriteMap.has(agent.id)) {
         return;
       }
-      const row = agent?.desk?.row ?? 0;
-      const col = agent?.desk?.column ?? 0;
-      const index = row * DESK_LAYOUT.cols + col;
-      const deskTile = deskTiles[index % deskTiles.length] || deskTiles[0];
-      const position = tileToPixel(deskTile);
+      const fallbackTile = { row: 32, col: 32 };
+      const homeTile = collisionMap?.workCenters?.length
+        ? pickNode(agent.id, collisionMap.workCenters, fallbackTile)
+        : collisionMap?.workNodes?.length
+          ? pickNode(agent.id, collisionMap.workNodes, fallbackTile)
+          : fallbackTile;
+      const position = tileToPixel(homeTile);
       spriteMap.set(agent.id, {
         x: position.x,
         y: position.y,
         targetX: position.x,
         targetY: position.y,
-        homeTile: { row: deskTile.row, col: deskTile.col },
+        homeTile: { row: homeTile.row, col: homeTile.col },
         direction: "front",
       });
     });
-  }, [agents]);
+  }, [agents, collisionMap]); // Re-run when collision map loads
 
   useTick((delta: number) => {
     timeRef.current += delta * 16;
     const spriteMap = spritesRef.current;
     const agentCache = agentCacheRef.current;
     const agentIds = new Set(agents.map((agent) => agent.id));
+    const occupiedTiles = new Map<string, string>();
+    agents.forEach((agent) => {
+      const sprite = spriteMap.get(agent.id);
+      if (!sprite || sprite.exiting) {
+        return;
+      }
+      const tile = pixelToTile(sprite.x, sprite.y);
+      occupiedTiles.set(nodeKey(tile.row, tile.col), agent.id);
+    });
     agents.forEach((agent) => {
       const sprite = spriteMap.get(agent.id);
       if (!sprite) {
         return;
       }
       const deskTarget = tileToPixel(sprite.homeTile);
-      if (shouldBeAtDesk(agent.status || "working")) {
-        const targetDistance = Math.hypot(
-          sprite.targetX - deskTarget.x,
-          sprite.targetY - deskTarget.y
-        );
-        if (targetDistance > 1) {
-          sprite.targetX = deskTarget.x;
-          sprite.targetY = deskTarget.y;
+
+      // -- Target Logic (Pathfinding) --
+      const currentTile = pixelToTile(sprite.x, sprite.y);
+      const isWorking = shouldBeAtDesk(agent.status || "working");
+      const isOccupied = (tile: { row: number; col: number }) => {
+        const occupant = occupiedTiles.get(nodeKey(tile.row, tile.col));
+        return occupant && occupant !== agent.id;
+      };
+      let workTarget = sprite.homeTile;
+      const workCandidates = collisionMap?.workCenters?.length
+        ? collisionMap.workCenters
+        : collisionMap?.workNodes || [];
+      if (workCandidates.length) {
+        let best: { row: number; col: number } | null = null;
+        let bestDist = Number.POSITIVE_INFINITY;
+        let bestAny: { row: number; col: number } | null = null;
+        let bestAnyDist = Number.POSITIVE_INFINITY;
+        workCandidates.forEach((node) => {
+          const dist = Math.abs(node.row - currentTile.row) + Math.abs(node.col - currentTile.col);
+          if (dist < bestAnyDist) {
+            bestAny = node;
+            bestAnyDist = dist;
+          }
+          if (!isOccupied(node) && dist < bestDist) {
+            best = node;
+            bestDist = dist;
+          }
+        });
+        workTarget = best || bestAny || sprite.homeTile;
+      }
+      const wanderTarget = getRandomWalkable(false);
+      let desiredKind: "work" | "wander" = isWorking ? "work" : "wander";
+      let desiredTile = isWorking ? workTarget : wanderTarget;
+
+      const now = Date.now();
+      const distance = Math.hypot(sprite.targetX - sprite.x, sprite.targetY - sprite.y);
+      const reachedTarget = distance < 0.6;
+      const idlePauseActive = sprite.idlePauseUntil && now < sprite.idlePauseUntil;
+
+      if (!isWorking) {
+        if (idlePauseActive) {
+          sprite.targetX = sprite.x;
+          sprite.targetY = sprite.y;
+          return;
         }
+        if (sprite.idlePauseUntil && now >= sprite.idlePauseUntil) {
+          sprite.idlePauseUntil = undefined;
+          sprite.wanderUntil = now + 3000 + Math.floor(Math.random() * 2000);
+          sprite.path = [];
+          sprite.pathIndex = undefined;
+          sprite.targetTile = undefined;
+          sprite.targetKind = undefined;
+          sprite.retargetAt = 0;
+        }
+        if (!sprite.wanderUntil) {
+          sprite.idlePauseUntil = now + 2000;
+          sprite.path = [];
+          sprite.pathIndex = undefined;
+          sprite.targetTile = undefined;
+          sprite.targetKind = undefined;
+          sprite.retargetAt = 0;
+        }
+      }
+
+      const workLocked = sprite.workLockUntil && now < sprite.workLockUntil;
+      const needsNewTarget =
+        !sprite.targetTile ||
+        (!workLocked && sprite.targetKind !== desiredKind) ||
+        (isWorking ? reachedTarget : (!sprite.wanderUntil || now > sprite.wanderUntil));
+
+      if (collisionMap && needsNewTarget && (!sprite.path || sprite.path.length === 0)) {
+        sprite.targetKind = desiredKind;
+        sprite.targetTile = desiredTile;
+        let rawPath = findPath(collisionMap.grid, currentTile, desiredTile);
+        if (rawPath.length === 0 && desiredKind === "work") {
+          const chairPos = tileToPixel(desiredTile);
+          sprite.x = chairPos.x;
+          sprite.y = chairPos.y;
+          sprite.targetX = chairPos.x;
+          sprite.targetY = chairPos.y;
+          sprite.path = [];
+          sprite.pathIndex = undefined;
+        } else {
+          sprite.path = simplifyPath(rawPath);
+        }
+        sprite.pathIndex = sprite.path.length > 1 ? 1 : 0;
+        sprite.retargetAt = now + 1400;
+        if (isWorking) {
+          sprite.workLockUntil = now + 2200;
+        }
+      }
+
+      if (sprite.path && sprite.path.length > 0 && sprite.pathIndex !== undefined) {
+        const nextIndex = Math.min(sprite.pathIndex, sprite.path.length - 1);
+        const nextNode = sprite.path[nextIndex];
+        if (nextNode.row === currentTile.row && nextNode.col === currentTile.col) {
+          if (sprite.pathIndex < sprite.path.length - 1) {
+            sprite.pathIndex += 1;
+          }
+        }
+        const px = tileToPixel(nextNode);
+        sprite.targetX = px.x;
+        sprite.targetY = px.y;
       }
 
       const dx = sprite.targetX - sprite.x;
       const dy = sprite.targetY - sprite.y;
-      const distance = Math.hypot(dx, dy);
       const speed = statusSpeed(agent.status || "working");
 
       if (distance > 0.1) {
-        const step = Math.min(speed, distance);
-        sprite.x += (dx / distance) * step;
-        sprite.y += (dy / distance) * step;
-        if (Math.abs(dx) > Math.abs(dy)) {
-          sprite.direction = dx > 0 ? "right" : "left";
-        } else {
-          sprite.direction = dy > 0 ? "front" : "back";
+        const step = Math.min(speed, distance, 0.4);
+        const nextX = sprite.x + (dx / distance) * step;
+        const nextY = sprite.y + (dy / distance) * step;
+        const smoothing = distance < 2 ? 0.4 : 1;
+        const smoothX = sprite.x + (nextX - sprite.x) * smoothing;
+        const smoothY = sprite.y + (nextY - sprite.y) * smoothing;
+
+        // Strict Collision Check: Will the next step landing in a wall?
+        const nextTile = pixelToTile(smoothX, smoothY);
+
+        let canMove = true;
+
+        // -- Dynamic Door Toggle --
+        // Check if I am entering a Door Node
+        // Or if I am ON a door node.
+        if (collisionMap?.doorNodes) {
+          // Check if ANY agent is on a door node
+          const isOnDoor = (c: number, r: number) => {
+            return collisionMap.doorNodes.some(n => n.col === c && n.row === r);
+          };
+
+          // Toggle Visuals
+          // We need to do this globally or per agent?
+          // "when it walk passed the door, the door become floor"
+          // Let's check current tile.
+          const curCol = Math.floor(sprite.x / TILE);
+          const curRow = Math.floor(sprite.y / TILE);
+
+          if (isOnDoor(curCol, curRow)) {
+            // Open Door
+            if (tileMap[curRow][curCol] !== "door_open") {
+              // Mutate state? Careful with performance in useTick.
+              // React state update in loop is bad.
+              // We should ref `tileMap` in a ref if possible, or use a separate ref for visuals that the renderer reads.
+              // For now, let's use the React setter but throttle it?
+              // Or assume SceneLayer re-renders fast enough?
+              // Let's cheat: Mutate the array directly + force update? No, React.
+              // Let's just update if needed.
+              setTileMap(prev => {
+                const clone = [...prev];
+                clone[curRow] = [...prev[curRow]];
+                clone[curRow][curCol] = "door_open";
+                return clone;
+              });
+            }
+          } else {
+            // Verify if we left a door?
+            // We need a way to close doors when NO ONE is on them.
+          }
         }
-      } else if (shouldBeAtDesk(agent.status || "working")) {
-        sprite.direction = "back";
-      } else {
-        sprite.direction = "front";
+
+        // ... Existing Move Logic ...
+        if (collisionMap && !isWalkable(nextTile.col, nextTile.row)) {
+          canMove = false;
+        }
+
+        if (canMove) {
+          sprite.x = smoothX;
+          sprite.y = smoothY;
+          const lastX = sprite.lastPosX ?? sprite.x;
+          const lastY = sprite.lastPosY ?? sprite.y;
+          const moved =
+            sprite.lastPosX === undefined ||
+            Math.hypot(sprite.x - lastX, sprite.y - lastY) > 0.05;
+          if (moved) {
+            sprite.lastPosX = sprite.x;
+            sprite.lastPosY = sprite.y;
+            sprite.lastMoveAt = now;
+          }
+          const lockExpired = !sprite.dirLockUntil || now > sprite.dirLockUntil;
+          if (lockExpired && distance > 3) {
+            if (Math.abs(dx) > Math.abs(dy)) {
+              if (Math.abs(dx) > 4) {
+                sprite.direction = dx > 0 ? "right" : "left";
+                sprite.dirLockUntil = now + 250;
+              }
+            } else {
+              if (Math.abs(dy) > 4) {
+                sprite.direction = dy > 0 ? "front" : "back";
+                sprite.dirLockUntil = now + 250;
+              }
+            }
+          }
+        } else {
+          sprite.targetX = sprite.x;
+          sprite.targetY = sprite.y;
+          sprite.direction = "front";
+        }
+      } else if (distance < 0.2) {
+        if (shouldBeAtDesk(agent.status || "working")) {
+          sprite.direction = "back";
+        } else {
+          sprite.direction = "front";
+        }
       }
 
-      if (distance < 1) {
-        if (shouldBeAtDesk(agent.status || "working")) {
-          sprite.targetX = deskTarget.x;
-          sprite.targetY = deskTarget.y;
-        } else {
-          const radius = statusRadius(agent.status || "idle");
-          const targetTile = pickWanderTile(sprite.homeTile, radius);
-          const target = tileToPixel(targetTile);
-          sprite.targetX = target.x;
-          sprite.targetY = target.y;
+      if (isWorking && sprite.lastMoveAt && now - sprite.lastMoveAt > 1500) {
+        const chairPos = tileToPixel(workTarget);
+        sprite.x = chairPos.x;
+        sprite.y = chairPos.y;
+        sprite.targetX = chairPos.x;
+        sprite.targetY = chairPos.y;
+        sprite.path = [];
+        sprite.pathIndex = undefined;
+        sprite.lastMoveAt = now;
+      }
+
+      if (distance < 0.2) {
+        if (sprite.path && sprite.pathIndex !== undefined) {
+          if (sprite.pathIndex < sprite.path.length - 1) {
+            sprite.pathIndex += 1;
+          } else {
+            sprite.path = [];
+            sprite.pathIndex = undefined;
+            if (!isWorking) {
+              sprite.idlePauseUntil = now + 2000;
+              sprite.wanderUntil = undefined;
+            }
+          }
         }
       }
     });
-    const exitTarget = tileToPixel(doorTile());
+
+    // Global Door Check (To Close Doors)
+    if (collisionMap?.doorNodes) {
+      collisionMap.doorNodes.forEach(node => {
+        // Check if ANY agent is on this node
+        const occupied = agents.some(a => {
+          const s = spriteMap.get(a.id);
+          if (!s) return false;
+          const c = Math.floor(s.x / TILE);
+          const r = Math.floor(s.y / TILE);
+          return c === node.col && r === node.row;
+        });
+
+        if (!occupied && tileMap[node.row][node.col] === "door_open") {
+          // Close it
+          setTileMap(prev => {
+            if (prev[node.row][node.col] !== "door_closed") {
+              const clone = [...prev];
+              clone[node.row] = [...prev[node.row]];
+              clone[node.row][node.col] = "door_closed";
+              return clone;
+            }
+            return prev;
+          });
+        }
+      });
+    }
+
+    const exitNode = collisionMap?.exitNodes?.[0] ?? doorTile();
     for (const [id, sprite] of spriteMap.entries()) {
       if (!sprite.exiting || agentIds.has(id)) {
         continue;
+      }
+      const targetTile = collisionMap
+        ? pickExitTarget(pixelToTile(sprite.x, sprite.y), collisionMap.exitNodes, collisionMap.grid)
+        : exitNode;
+      const baseTarget = tileToPixel(targetTile);
+      const exitTarget = { x: baseTarget.x + EXIT_OFFSET_X, y: baseTarget.y + EXIT_OFFSET_Y };
+
+      if (collisionMap && (!sprite.path || sprite.path.length === 0)) {
+        const currentTile = pixelToTile(sprite.x, sprite.y);
+        sprite.path = simplifyPath(findPath(collisionMap.grid, currentTile, targetTile));
+        sprite.pathIndex = sprite.path.length > 1 ? 1 : 0;
+      }
+      if (sprite.path && sprite.path.length > 0 && sprite.pathIndex !== undefined) {
+        const nextIndex = Math.min(sprite.pathIndex, sprite.path.length - 1);
+        const nextNode = sprite.path[nextIndex];
+        const px = tileToPixel(nextNode);
+        sprite.targetX = px.x;
+        sprite.targetY = px.y;
+      } else {
+        sprite.targetX = baseTarget.x;
+        sprite.targetY = baseTarget.y;
       }
       const dx = sprite.targetX - sprite.x;
       const dy = sprite.targetY - sprite.y;
       const distance = Math.hypot(dx, dy);
       const step = Math.min(0.85, distance);
       if (distance > 0.1) {
-        sprite.x += (dx / distance) * step;
-        sprite.y += (dy / distance) * step;
+        const nextX = sprite.x + (dx / distance) * step;
+        const nextY = sprite.y + (dy / distance) * step;
+        const nextTile = pixelToTile(nextX, nextY);
+        if (!collisionMap || isWalkable(nextTile.col, nextTile.row)) {
+          sprite.x = nextX;
+          sprite.y = nextY;
+        }
       }
       sprite.direction = dy > 0 ? "front" : "back";
       if (!sprite.exitAt) {
         sprite.exitAt = Date.now();
+      }
+      if (distance < 0.2 && !sprite.goodbyeUntil && (!sprite.path || sprite.path.length === 0)) {
+        const now = Date.now();
+        sprite.goodbyeUntil = now + GOODBYE_TTL_MS;
+        sprite.removeAt = now + GOODBYE_TTL_MS;
+      }
+      if (distance < 0.2 && sprite.path && sprite.pathIndex !== undefined) {
+        if (sprite.pathIndex < sprite.path.length - 1) {
+          sprite.pathIndex += 1;
+        } else {
+          sprite.path = [];
+          sprite.pathIndex = undefined;
+        }
       }
       if (
         distance < 1 &&
@@ -1036,9 +1270,6 @@ const SceneLayer = ({
       ) {
         spriteMap.delete(id);
         agentCache.delete(id);
-      } else if (Math.hypot(sprite.targetX - exitTarget.x, sprite.targetY - exitTarget.y) > 1) {
-        sprite.targetX = exitTarget.x;
-        sprite.targetY = exitTarget.y;
       }
     }
     setFrame((current) => current + 1);
@@ -1058,6 +1289,9 @@ const SceneLayer = ({
           : 0x7aa0d8;
   const showTodoPulse =
     lastTodoSummary?.updatedAt && time - lastTodoSummary.updatedAt < EVENT_TTL_MS;
+  const todoTargetId = activeSessionId
+    ? agents.find((agent) => agent.sessionId === activeSessionId)?.id
+    : undefined;
   const renderList: RenderableItem[] = [];
   const agentMap = new Map(agents.map((agent) => [agent.id, agent]));
   for (const [id, sprite] of spritesRef.current.entries()) {
@@ -1070,31 +1304,16 @@ const SceneLayer = ({
   return (
     <>
       <Container>
-        {tileMap.map((row, rowIndex) =>
-          row.map((type, colIndex) => {
-            const texture = tileTextures[type] || tileTextures.grass;
-            if (!texture) {
-              return null;
-            }
-            const position = tileToPixel({ col: colIndex, row: rowIndex });
-            return (
-              <Sprite
-                key={`tile-${rowIndex}-${colIndex}`}
-                texture={texture}
-                x={colIndex * TILE}
-                y={rowIndex * TILE}
-              />
-            );
-          })
-        )}
+        <Sprite texture={Texture.from("/office.png")} x={0} y={0} />
       </Container>
+      <></>
       <TitleBadge x={8} y={8} />
       <Graphics
         draw={(graphics: PixiGraphics) => {
           graphics.clear();
           if (activeSession && activeStatus) {
-            const lampX = MEETING_ROOM.colEnd * TILE + TILE - 14;
-            const lampY = MEETING_ROOM.rowStart * TILE + 6;
+            const lampX = sceneWidth - 26;
+            const lampY = 10;
             graphics.lineStyle(2, 0x4a5f66, 1);
             graphics.beginFill(statusLampColor, showStatusPulse ? 1 : 0.6);
             graphics.drawRoundedRect(lampX, lampY, 10, 10, 3);
@@ -1105,23 +1324,6 @@ const SceneLayer = ({
             }
             graphics.lineStyle(0, 0, 0);
           }
-        }}
-      />
-      <Graphics
-        draw={(graphics: PixiGraphics) => {
-          if (!showTodoPulse) {
-            return;
-          }
-          const baseX = 154;
-          const baseY = 8;
-          graphics.beginFill(0xf7f0d4);
-          graphics.lineStyle(2, 0x4a5f66, 1);
-          graphics.drawRoundedRect(baseX, baseY + 4, 16, 16, 3);
-          graphics.endFill();
-          graphics.beginFill(0x4a5f66);
-          graphics.drawRect(baseX + 5, baseY, 6, 6);
-          graphics.endFill();
-          graphics.lineStyle(0, 0, 0);
         }}
       />
       <Graphics
@@ -1140,271 +1342,304 @@ const SceneLayer = ({
           });
         }}
       />
-      {renderList.map((item) => {
-        if (item.type !== "agent") return null;
-        const agent = agents.find((a) => a.id === item.id) || agentCacheRef.current.get(item.id);
-        if (!agent) return null;
-        const sprite = spritesRef.current.get(agent.id);
-        if (!sprite) return null;
+      {
+        renderList.map((item) => {
+          if (item.type !== "agent") return null;
+          const agent = agents.find((a) => a.id === item.id) || agentCacheRef.current.get(item.id);
+          if (!agent) return null;
+          const sprite = spritesRef.current.get(agent.id);
+          if (!sprite) return null;
 
-        const x = sprite.x - 8;
-        const y = sprite.y - 12;
-        const motion = 0;
-        const direction = sprite.direction || "front";
-        const movement = Math.hypot(sprite.targetX - sprite.x, sprite.targetY - sprite.y);
+          const x = sprite.x - 8;
+          const y = sprite.y - 12;
+          const motion = 0;
+          const direction = sprite.direction || "front";
+          const movement = Math.hypot(sprite.targetX - sprite.x, sprite.targetY - sprite.y);
         const isRunning = movement > 0.8;
         const isWalking = movement > 0.2;
-        const state = agent.status === "thinking" ? "jump" : isRunning ? "run" : isWalking ? "walk" : "idle";
-        const sheet = spriteSheets[state] || spriteSheets.idle;
-        const frameCount = sheet?.right.length || 1;
-        const frameSpeed = isRunning ? 90 : isWalking ? 120 : 200;
-        const frameIndex = Math.floor(time / frameSpeed) % frameCount;
-        const frameSet = sheet
-          ? direction === "back"
-            ? sheet.up
-            : direction === "front"
-              ? sheet.down
-              : sheet.right
-          : null;
-        const texture = frameSet ? frameSet[frameIndex] : null;
-        const flipX = direction === "left" ? -1 : 1;
-        const aliasLabel = (agent.alias || agent.name || agent.id || "Agent")
-          .slice(0, 10)
-          .toUpperCase();
-        const messageEventAt =
-          agent.lastEventType?.startsWith("message.") ? agent.lastEventAt || 0 : 0;
-        const messageTimestamp = agent.lastMessageAt || messageEventAt || 0;
-        const isMessageFresh =
-          messageTimestamp && Date.now() - messageTimestamp < MESSAGE_TTL_MS;
-        const isStreaming =
-          agent.lastStreamingAt &&
-          Date.now() - agent.lastStreamingAt < TYPING_TTL_MS;
-        const statusText = statusBubbleText(agent.status || "working");
-        const snippet = agent.lastMessageSnippet || "";
-        const showGoodbye = Boolean(sprite.goodbyeUntil && Date.now() < sprite.goodbyeUntil);
-        const goodbyeText = "bye";
-        const messageText = showGoodbye
-          ? goodbyeText
-          : isStreaming
-            ? ".".repeat(Math.max(1, Math.floor(time / 250) % 4))
-            : snippet;
-        const now = Date.now();
-        const hasRecentEdit =
-          agent.lastFileEditAt && now - agent.lastFileEditAt < ACTIVITY_TTL_MS;
-        const eventType = agent.lastEventType || "";
-        const lastEventAt = agent.lastEventAt || agent.lastActivityAt || 0;
-        const hasRecentEvent = lastEventAt && now - lastEventAt < EVENT_TTL_MS;
-        const isMessageUpdateEvent =
-          eventType === "message.updated" || eventType === "message.part.updated";
-        const isSessionEvent = eventType.startsWith("session.");
-        const isToolEvent =
-          hasRecentEvent &&
-          (eventType === "tool.execute.before" || eventType === "tool.execute.after");
-        const toolRingColor = eventType === "tool.execute.before" ? 0xf2b74e : 0x7aa0d8;
-        const eventBadgeColor = EVENT_BADGE_COLORS[eventType];
-        const showEventBadge =
-          hasRecentEvent &&
-          !isToolEvent &&
-          !hasRecentEdit &&
-          !isMessageUpdateEvent &&
-          !isSessionEvent &&
-          eventBadgeColor !== undefined;
-        const activityEmoji =
-          hasRecentEdit
-            ? "✏️"
-            : agent.status === "thinking"
-              ? "💭"
-              : agent.status === "working"
-                ? "🛠️"
-                : "";
-        const showActivity = Boolean(activityEmoji);
-        const messageLines = wrapLines(
-          messageText,
-          MESSAGE_MAX_WIDTH,
-          bubbleStyle,
-          MESSAGE_MAX_LINES
+        const currentTile = pixelToTile(sprite.x, sprite.y);
+        const isOnWorkChair = Boolean(
+          collisionMap?.workNodes?.some(
+            (node) => node.row === currentTile.row && node.col === currentTile.col
+          )
         );
-        const messageLineWidths = messageLines.map(
-          (line) => TextMetrics.measureText(line, bubbleStyle).width
-        );
-        const messageContentWidth = messageLineWidths.length
-          ? Math.max(...messageLineWidths)
-          : 0;
-        const messageBubbleWidth =
-          Math.max(MESSAGE_MIN_WIDTH, Math.min(messageContentWidth, MESSAGE_MAX_WIDTH)) +
-          MESSAGE_PADDING * 2;
-        const lineHeight = (Number(bubbleStyle.fontSize) || 9) + 2;
-        const messageHeight = messageLines.length * lineHeight + MESSAGE_PADDING * 2;
-        const messageBubbleX = sprite.x - messageBubbleWidth / 2;
-        const messageBubbleY = y - 56 + motion - (messageLines.length - 1) * 6;
-        const messageTextX = messageBubbleX + MESSAGE_PADDING;
-        const messageTextY = messageBubbleY + MESSAGE_PADDING;
-        const labelPaddingX = 4;
-        const chipHeight = 12;
-        const chipGap = 4;
-        const labelY = y + 26 + motion;
-        const activityBubbleSize = 18;
-        const activityBubbleX = sprite.x - activityBubbleSize / 2;
-        const messageBubble: MessageBubbleData = {
-          show: Boolean(showGoodbye || (agent.lastMessageSnippet && isMessageFresh)),
-          x: messageBubbleX,
-          y: messageBubbleY,
-          width: messageBubbleWidth,
-          height: messageHeight,
-          textX: messageTextX,
-          textY: messageTextY,
-          lines: messageLines,
-        };
-        const statusY = messageBubble.show
-          ? messageBubbleY + messageHeight + 4
-          : y - 28 + motion;
-        const activityBubbleY = statusY;
-        const activityBubble: ActivityBubbleData = {
-          show: showActivity,
-          x: activityBubbleX,
-          y: activityBubbleY,
-          size: activityBubbleSize,
-          emoji: activityEmoji,
-          textX: activityBubbleX + 3,
-          textY: activityBubbleY + 1,
-        };
+        const shouldJump = agent.status === "thinking" && isOnWorkChair;
+        const state = shouldJump ? "jump" : isRunning ? "run" : isWalking ? "walk" : "idle";
+          const sheet = spriteSheets[state] || spriteSheets.idle;
+          const frameCount = sheet?.right.length || 1;
+          const frameSpeed = isRunning ? 90 : isWalking ? 120 : 200;
+          const frameIndex = Math.floor(time / frameSpeed) % frameCount;
+          const frameSet = sheet
+            ? direction === "back"
+              ? sheet.up
+              : direction === "front"
+                ? sheet.down
+                : sheet.right
+            : null;
+          const texture = frameSet ? frameSet[frameIndex] : null;
+          const flipX = direction === "left" ? -1 : 1;
+          const aliasLabel = (agent.alias || agent.name || agent.id || "Agent")
+            .slice(0, 10)
+            .toUpperCase();
+          const messageEventAt =
+            agent.lastEventType?.startsWith("message.") ? agent.lastEventAt || 0 : 0;
+          const messageTimestamp = agent.lastMessageAt || messageEventAt || 0;
+          const isMessageFresh =
+            messageTimestamp && Date.now() - messageTimestamp < MESSAGE_TTL_MS;
+          const isStreaming =
+            agent.lastStreamingAt &&
+            Date.now() - agent.lastStreamingAt < TYPING_TTL_MS;
+          const statusText = statusBubbleText(agent.status || "working");
+          const snippet = agent.lastMessageSnippet || "";
+          const showGoodbye = Boolean(sprite.goodbyeUntil && Date.now() < sprite.goodbyeUntil);
+          const goodbyeText = "bye";
+          const messageText = showGoodbye
+            ? goodbyeText
+            : isStreaming
+              ? ".".repeat(Math.max(1, Math.floor(time / 250) % 4))
+              : snippet;
+          const now = Date.now();
+          const hasRecentEdit =
+            agent.lastFileEditAt && now - agent.lastFileEditAt < ACTIVITY_TTL_MS;
+          const eventType = agent.lastEventType || "";
+          const lastEventAt = agent.lastEventAt || agent.lastActivityAt || 0;
+          const hasRecentEvent = lastEventAt && now - lastEventAt < EVENT_TTL_MS;
+          const isMessageUpdateEvent =
+            eventType === "message.updated" || eventType === "message.part.updated";
+          const isSessionEvent = eventType.startsWith("session.");
+          const isToolEvent =
+            hasRecentEvent &&
+            (eventType === "tool.execute.before" || eventType === "tool.execute.after");
+          const toolRingColor = eventType === "tool.execute.before" ? 0xf2b74e : 0x7aa0d8;
+          const eventBadgeColor = EVENT_BADGE_COLORS[eventType];
+          const showEventBadge =
+            hasRecentEvent &&
+            !isToolEvent &&
+            !hasRecentEdit &&
+            !isMessageUpdateEvent &&
+            !isSessionEvent &&
+            eventBadgeColor !== undefined;
+          const activityEmoji =
+            hasRecentEdit
+              ? "✏️"
+              : agent.status === "thinking"
+                ? "💭"
+                : agent.status === "working"
+                  ? "🛠️"
+                  : "";
+          const showActivity = Boolean(activityEmoji);
+          const messageLines = wrapLines(
+            messageText,
+            MESSAGE_MAX_WIDTH,
+            bubbleStyle,
+            MESSAGE_MAX_LINES
+          );
+          const messageLineWidths = messageLines.map(
+            (line) => TextMetrics.measureText(line, bubbleStyle).width
+          );
+          const messageContentWidth = messageLineWidths.length
+            ? Math.max(...messageLineWidths)
+            : 0;
+          const messageBubbleWidth =
+            Math.max(MESSAGE_MIN_WIDTH, Math.min(messageContentWidth, MESSAGE_MAX_WIDTH)) +
+            MESSAGE_PADDING * 2;
+          const lineHeight = (Number(bubbleStyle.fontSize) || 9) + 2;
+          const messageHeight = messageLines.length * lineHeight + MESSAGE_PADDING * 2;
+          const messageBubbleX = sprite.x - messageBubbleWidth / 2;
+          const messageBubbleY = y - 56 + motion - (messageLines.length - 1) * 6;
+          const messageTextX = messageBubbleX + MESSAGE_PADDING;
+          const messageTextY = messageBubbleY + MESSAGE_PADDING;
+          const labelPaddingX = 4;
+          const chipHeight = 12;
+          const chipGap = 4;
+                const labelY = y + 34 + motion;
+          const activityBubbleSize = 18;
+          const activityBubbleX = sprite.x - activityBubbleSize / 2;
+          const messageBubble: MessageBubbleData = {
+            show: Boolean(showGoodbye || (agent.lastMessageSnippet && isMessageFresh)),
+            x: messageBubbleX,
+            y: messageBubbleY,
+            width: messageBubbleWidth,
+            height: messageHeight,
+            textX: messageTextX,
+            textY: messageTextY,
+            lines: messageLines,
+          };
+          const statusY = messageBubble.show
+            ? messageBubbleY + messageHeight + 4
+            : y - 28 + motion;
+          const activityBubbleY = statusY;
+          const activityBubble: ActivityBubbleData = {
+            show: showActivity,
+            x: activityBubbleX,
+            y: activityBubbleY,
+            size: activityBubbleSize,
+            emoji: activityEmoji,
+            textX: activityBubbleX + 3,
+            textY: activityBubbleY + 1,
+          };
 
-        return (
-          <Container
-            key={agent.id}
-            eventMode="static"
-            cursor="pointer"
-            onpointerdown={() => onSelectAgent(agent.id)}
-          >
-            <Graphics
-              draw={(graphics: PixiGraphics) => {
-                graphics.clear();
-                graphics.beginFill(COLORS.shadow);
-                graphics.drawRect(x + 2, y + 18 + motion, 12, 4);
-                graphics.endFill();
-
-                if (!texture) {
-                  const bodyColor = pickAvatarColor(agent);
-                  graphics.beginFill(bodyColor);
-                  graphics.drawRect(x, y + motion, 16, 14);
-                  graphics.drawRect(x + 2, y - 6 + motion, 12, 8);
+          return (
+            <Container
+              key={agent.id}
+              eventMode="static"
+              cursor="pointer"
+              onpointerdown={() => onSelectAgent(agent.id)}
+            >
+              <Graphics
+                draw={(graphics: PixiGraphics) => {
+                  graphics.clear();
+                  graphics.beginFill(COLORS.shadow);
+                  graphics.drawRect(x + 2, y + 18 + motion, 12, 4);
                   graphics.endFill();
-                  graphics.beginFill(0x13131a);
-                  if (direction === "front") {
-                    graphics.drawRect(x + 4, y - 2 + motion, 2, 2);
-                    graphics.drawRect(x + 10, y - 2 + motion, 2, 2);
-                  } else if (direction === "right") {
-                    graphics.drawRect(x + 10, y - 2 + motion, 2, 2);
-                  } else if (direction === "left") {
-                    graphics.drawRect(x + 4, y - 2 + motion, 2, 2);
+
+                  if (!texture) {
+                    const bodyColor = pickAvatarColor(agent);
+                    graphics.beginFill(bodyColor);
+                    // 32x32 Character Size (User requested 32x32)
+                    graphics.drawRect(x - 8, y + motion - 8, 32, 28);
+                    graphics.drawRect(x - 4, y - 20 + motion, 24, 16); // Head
+                    graphics.endFill();
+                    graphics.beginFill(0x13131a);
+                    // Eyes
+                    if (direction === "front") {
+                      graphics.drawRect(x + 4, y - 12 + motion, 4, 4);
+                      graphics.drawRect(x + 16, y - 12 + motion, 4, 4);
+                    } else if (direction === "right") {
+                      graphics.drawRect(x + 16, y - 12 + motion, 4, 4);
+                    } else if (direction === "left") {
+                      graphics.drawRect(x + 4, y - 12 + motion, 4, 4);
+                    }
+                    graphics.endFill();
                   }
-                  graphics.endFill();
-                }
 
-                if (isToolEvent) {
-                  graphics.lineStyle(2, toolRingColor, 0.9);
-                  graphics.drawCircle(sprite.x, y + motion + 2, 12);
-                  graphics.lineStyle(0, 0, 0);
-                }
+                  if (isToolEvent) {
+                    graphics.lineStyle(2, toolRingColor, 0.9);
+                    graphics.drawCircle(sprite.x, y + motion + 8, 80); // Larger ring
+                    graphics.lineStyle(0, 0, 0);
+                  }
 
-                if (showEventBadge) {
-                  const badgeSize = 8;
-                  const badgeX = sprite.x + 10;
-                  const badgeY = y - 26 + motion;
+                  if (showEventBadge) {
+                    const badgeSize = 8;
+                    const badgeX = sprite.x + 10;
+                    const badgeY = y - 26 + motion;
+                    drawRoundedRect(
+                      graphics,
+                      badgeX,
+                      badgeY,
+                      badgeSize,
+                      badgeSize,
+                      2,
+                      0xf1f3ff,
+                      eventBadgeColor,
+                      1
+                    );
+                  }
+
+                  const aliasWidth =
+                    TextMetrics.measureText(aliasLabel, labelStyle).width +
+                    labelPaddingX * 2;
+                  const aliasX = sprite.x - aliasWidth / 2; // Centered on sprite (which is center of tile)
+
                   drawRoundedRect(
                     graphics,
-                    badgeX,
-                    badgeY,
-                    badgeSize,
-                    badgeSize,
-                    2,
-                    0xf1f3ff,
-                    eventBadgeColor,
-                    1
-                  );
-                }
-
-                const aliasWidth =
-                  TextMetrics.measureText(aliasLabel, labelStyle).width +
-                  labelPaddingX * 2;
-                const aliasX = x + 8 - aliasWidth / 2;
-
-                drawRoundedRect(
-                  graphics,
-                  aliasX,
-                  labelY - 10,
-                  aliasWidth,
-                  chipHeight,
-                  6,
-                  0x2b5a3c,
-                  0x73d28f
-                );
-
-                if (messageBubble.show) {
-                  drawRoundedRect(
-                    graphics,
-                    messageBubble.x,
-                    messageBubble.y,
-                    messageBubble.width,
-                    messageBubble.height,
-                    4,
-                    0xf1fff3,
-                    0x3a5b3c,
-                    1.5
-                  );
-                }
-
-                if (activityBubble.show) {
-                  drawRoundedRect(
-                    graphics,
-                    activityBubble.x,
-                    activityBubble.y,
-                    activityBubble.size,
-                    activityBubble.size,
+                    aliasX,
+                    labelY - 10,
+                    aliasWidth,
+                    chipHeight,
                     6,
-                    0xf1f3ff,
-                    0x5a6aa0,
-                    1
+                    0x2b5a3c,
+                    0x73d28f
                   );
-                }
-              }}
-            />
-            {texture && (
-              <Sprite
-                texture={texture}
-                anchor={0.5}
-                x={sprite.x}
-                y={sprite.y + motion}
-                scale={{ x: flipX, y: 1 }}
+
+                  if (showTodoPulse && agent.id === todoTargetId) {
+                    const badgeX = aliasX + aliasWidth + 6;
+                    const badgeY = labelY - 12;
+                    graphics.beginFill(0xf7f0d4);
+                    graphics.lineStyle(2, 0x4a5f66, 1);
+                    graphics.drawRoundedRect(badgeX, badgeY + 4, 14, 14, 3);
+                    graphics.endFill();
+                    graphics.beginFill(0x4a5f66);
+                    graphics.drawRect(badgeX + 4, badgeY, 6, 6);
+                    graphics.endFill();
+                    graphics.lineStyle(0, 0, 0);
+                  }
+
+                  if (messageBubble.show) {
+                    drawRoundedRect(
+                      graphics,
+                      messageBubble.x,
+                      messageBubble.y,
+                      messageBubble.width,
+                      messageBubble.height,
+                      4,
+                      0xf1fff3,
+                      0x3a5b3c,
+                      1.5
+                    );
+                  }
+
+                  if (activityBubble.show) {
+                    drawRoundedRect(
+                      graphics,
+                      activityBubble.x,
+                      activityBubble.y,
+                      activityBubble.size,
+                      activityBubble.size,
+                      6,
+                      0xf1f3ff,
+                      0x5a6aa0,
+                      1
+                    );
+                  }
+                }}
               />
-            )}
-            <Text
-              text={aliasLabel}
-              anchor={0.5}
-              x={x + 8}
-              y={y + 22 + motion}
-              style={aliasStyle}
-            />
-            <MessageBubble bubble={messageBubble} style={bubbleStyle} />
-            <ActivityBubble bubble={activityBubble} style={activityStyle} />
-          </Container>
-        );
-      })}
+              {texture && (
+                <Sprite
+                  texture={texture}
+                  anchor={0.5}
+                  x={sprite.x}
+                  y={sprite.y + motion}
+                  scale={{ x: flipX * 2, y: 2 }}
+                />
+              )}
+              <Text
+                text={aliasLabel}
+                anchor={0.5}
+                x={x + 8}
+                y={y + 30 + motion}
+                style={aliasStyle}
+              />
+              <MessageBubble bubble={messageBubble} style={bubbleStyle} />
+              <ActivityBubble bubble={activityBubble} style={activityStyle} />
+            </Container>
+          );
+        })
+      }
     </>
   );
 };
 
-export const PixiScene = (props: PixiSceneProps) => (
-  <Stage
-    width={WIDTH}
-    height={HEIGHT}
-    style={{ width: "100%", height: "auto", display: "block" }}
-    options={{
-      antialias: false,
-      backgroundColor: 0x101615,
-      preserveDrawingBuffer: true,
-    }}
-  >
-    <SceneLayer {...props} />
-  </Stage>
-);
+export const PixiScene = (props: PixiSceneProps) => {
+  const [dimensions, setDimensions] = useState({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT });
+
+  return (
+    <Stage
+      width={dimensions.width}
+      height={dimensions.height}
+      style={{ width: dimensions.width, height: dimensions.height, display: "block" }}
+      options={{
+        antialias: false,
+        backgroundColor: 0x101615,
+        preserveDrawingBuffer: true,
+      }}
+    >
+      <SceneLayer
+        {...props}
+        sceneWidth={dimensions.width}
+        sceneHeight={dimensions.height}
+        setDimensions={setDimensions}
+      />
+    </Stage>
+  );
+};

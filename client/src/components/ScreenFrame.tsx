@@ -25,10 +25,10 @@ const ScreenFrame = ({
   selectedAgentId,
   onSelectAgent,
 }: ScreenFrameProps) => (
-  <div className="screen-frame">
+  <div className="flex flex-col gap-4">
     <BossBox message={bossMessageText} status={bossStatus} />
-    <div className="screen-bezel">
-      <div className="pixi-stage">
+    <div className="pixi-wrapper">
+      <div className="w-full flex justify-center bg-[#101615] rounded-lg overflow-hidden">
         <PixiScene
           agents={agents}
           interactions={interactions}

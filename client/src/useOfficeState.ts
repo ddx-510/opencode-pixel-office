@@ -22,6 +22,7 @@ type Agent = {
     column?: number;
     deskIndex?: number;
   };
+  role?: string;
 };
 
 type Interaction = {

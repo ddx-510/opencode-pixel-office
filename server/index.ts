@@ -8,7 +8,7 @@ import { WebSocketServer } from "ws";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = Number.parseInt(process.env.PORT || "3000", 10);
+const PORT = Number.parseInt(process.env.PORT || "5100", 10);
 const CLIENT_DIST_DIR = path.join(__dirname, "..", "client", "dist");
 const CLIENT_DIR = fs.existsSync(CLIENT_DIST_DIR)
   ? CLIENT_DIST_DIR
@@ -863,10 +863,9 @@ const broadcast = (payload: unknown) => {
 app.post("/events", (req: any, res: any) => {
   const event = req.body as EventPayload;
   const eventType = getEventType(event) || "unknown";
-  console.log(`[PixelOffice] Event received: ${eventType}`);
+  // console.log(`[PixelOffice] Event received: ${eventType}`);
   if (!officeState.loggedEventTypes.has(eventType)) {
     officeState.loggedEventTypes.add(eventType);
-    console.log(`[PixelOffice] Sample payload for ${eventType}:`, JSON.stringify(event));
   }
   if (!KNOWN_EVENTS.has(eventType)) {
     res.status(202).json({ ok: true });
