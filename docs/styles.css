@@ -1,8 +1,17 @@
 :root {
   color-scheme: light;
-  font-family: "Press Start 2P", "Courier New", monospace;
-  background: #dfe7ea;
-  color: #2a3a3d;
+  /* Retro Palette */
+  --bg-color: #e5f2fb;
+  --panel-bg-start: #1e3a8a;
+  --panel-bg-end: #0f172a;
+  --text-color: #ffffff;
+  --accent-color: #6296e8;
+  --secondary-accent: #e4be58; /* Gold */
+  --border-color: #ffffff;
+  --shadow-color: #000000;
+  
+  --font-display: "Press Start 2P", monospace;
+  --font-body: "Inter", sans-serif;
 }
 
 * {
@@ -11,96 +20,170 @@
 
 body {
   margin: 0;
-  background: radial-gradient(circle at top, #e9eff2, #cbd9df 60%, #b5c6cf);
+  background-color: var(--bg-color);
+  /* Pixel Pattern Background */
+  background-image: 
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+  background-size: 100% 4px, 6px 100%;
+  font-family: var(--font-body);
+  color: #3d5052;
 }
 
+/* Hero Section */
 .hero {
-  padding: 48px 24px 32px;
+  padding: 64px 24px 48px;
   text-align: center;
+  background: linear-gradient(180deg, #6296e8 0%, #e5f2fb 100%);
+  border-bottom: 4px solid #ffffff;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.1);
+  margin-bottom: 48px;
 }
 
 .hero h1 {
-  margin: 0 0 12px;
-  font-size: 20px;
-  letter-spacing: 0.08em;
+  margin: 0 0 16px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: #ffffff;
+  text-shadow: 2px 2px 0 var(--shadow-color);
+  line-height: 1.5;
 }
 
 .hero p {
-  margin: 0 0 24px;
-  font-size: 11px;
-  color: #3f5158;
+  margin: 0 0 32px;
+  font-size: 16px;
+  color: #1e3a8a;
+  font-weight: 500;
 }
 
 .actions {
   display: flex;
   justify-content: center;
-  gap: 12px;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
 .button {
   text-decoration: none;
-  padding: 10px 16px;
-  border: 3px solid #4a5f66;
-  color: #1f2b33;
-  background: #e6eeef;
-  box-shadow: 0 4px 0 #4a5f66;
-  font-size: 10px;
+  padding: 12px 24px;
+  background: #6296e8;
+  color: #ffffff;
+  border: 4px solid #ffffff;
+  outline: 4px solid #1e3a8a;
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.2);
+  font-family: var(--font-display);
+  font-size: 12px;
+  text-transform: uppercase;
+  text-shadow: 1px 1px 0 var(--shadow-color);
+  transition: transform 0.1s;
+}
+
+.button:hover {
+  transform: translateY(-2px);
+  background: #4db152;
 }
 
 .button.secondary {
-  background: #cfe0e6;
+  background: #e4be58;
+  color: #1e3a8a;
+  text-shadow: none;
 }
 
+.button.secondary:hover {
+  background: #fde68a;
+}
+
+/* Main Content */
 main {
-  max-width: 1100px;
+  max-width: 960px;
   margin: 0 auto;
-  padding: 0 24px 48px;
+  padding: 0 24px 64px;
 }
 
 .section {
-  margin-top: 36px;
+  margin-top: 64px;
 }
 
 .section h2 {
-  font-size: 14px;
-  margin-bottom: 16px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  margin-bottom: 24px;
+  color: #1e3a8a;
+  text-transform: uppercase;
+  border-bottom: 4px solid #6296e8;
+  padding-bottom: 8px;
+  display: inline-block;
 }
 
+/* RPG Cards */
 .grid {
   display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
 .card {
-  background: #eef3f5;
-  border: 3px solid #4a5f66;
-  padding: 12px;
-  box-shadow: 0 4px 0 #4a5f66;
+  background: linear-gradient(170deg, var(--panel-bg-start) 0%, var(--panel-bg-end) 100%);
+  border: 4px solid var(--border-color);
+  outline: 4px solid #1e3a8a;
+  padding: 8px;
+  margin: 4px; /* Space for outline */
+  box-shadow: 8px 8px 0 rgba(0,0,0,0.2);
+  color: var(--text-color);
 }
 
 .placeholder {
-  height: 140px;
-  background: repeating-linear-gradient(45deg, #c7d5db, #c7d5db 10px, #dde7eb 10px, #dde7eb 20px);
+  height: 180px;
+  background: #0f172a;
+  border: 2px solid #6296e8;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #4a5f66;
+  color: #84e6fd;
+  font-family: var(--font-display);
   font-size: 10px;
-  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+figcaption {
+  margin-top: 12px;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  text-shadow: 1px 1px 0 var(--shadow-color);
+}
+
+/* Lists */
+ul li, ol li {
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+ul {
+  list-style-type: square;
+}
+
+code {
+  font-family: monospace;
+  background: #1e3a8a;
+  color: #e4be58;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #ffffff;
 }
 
 footer {
   text-align: center;
-  padding: 24px 12px 40px;
-  font-size: 9px;
-  color: #3f5158;
+  padding: 48px 24px;
+  font-size: 11px;
+  color: #64748b;
+  background: #e5f2fb;
+  border-top: 2px dashed #a5cbde;
 }
 
-code {
-  font-family: "Courier New", monospace;
-  background: #f4f7f8;
-  padding: 2px 6px;
-  border: 2px solid #4a5f66;
+footer a {
+  color: #6296e8;
+  text-decoration: none;
+  font-weight: bold;
 }

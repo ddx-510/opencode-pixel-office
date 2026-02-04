@@ -24,7 +24,7 @@ const App = () => {
   } = useOfficeState();
 
   const activeLabel = activeSessionId ? activeSessionId.slice(0, 10) : "N/A";
-  const version = appVersion ? `v${appVersion}` : "v0.0.0";
+  const version = appVersion ? `v${appVersion}` : "v1.0.0";
   const todoSummary = lastTodoSummary
     ? `${lastTodoSummary.completed}/${lastTodoSummary.total}`
     : "0/0";
