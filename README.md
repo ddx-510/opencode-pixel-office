@@ -89,7 +89,7 @@ Monitor your agents from your phone or tablet!
     ```bash
     opencode-pixel-office install
     ```
-    This sets up the standalone app in `~/.opencode/pixel-office` and enables the plugin in your `opencode.json`.
+    This sets up the standalone app in `~/.opencode/pixel-office` and installs the `pixel-office.js` plugin script to `~/.opencode/plugins/`.
 
 3.  **Start OpenCode**:
     Simply open your IDE. Pixel Office will auto-launch in your browser at `http://localhost:5100`.

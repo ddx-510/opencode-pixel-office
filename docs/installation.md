@@ -18,7 +18,7 @@ opencode-pixel-office install
 **What this does:**
 -   Copies the Pixel Office app to `~/.opencode/pixel-office`.
 -   Installs production dependencies in that folder.
--   Adds the plugin entry to your `~/.config/opencode/opencode.json`.
+-   Installs the `pixel-office.js` plugin to `~/.opencode/plugins/`, which OpenCode automatically loads.
 
 ### Step 3: Start OpenCode
 Now, simply open your OpenCode IDE.

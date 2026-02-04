@@ -1,6 +1,6 @@
 {
   "name": "opencode-pixel-office",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "module",
   "files": [
     "bin",

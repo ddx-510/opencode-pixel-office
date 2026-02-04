@@ -18,6 +18,7 @@ const PIXEL_OFFICE_CONFIG_PATH = path.join(DEFAULT_APP_DIR, "config.json");
 
 const args = process.argv.slice(2);
 const shouldInstall = args.includes("install");
+const shouldUninstall = args.includes("uninstall");
 const yesFlag = args.includes("--yes") || args.includes("-y");
 const skipJson = args.includes("--no-json");
 const portIndex = args.findIndex((arg) => arg === "--port");
@@ -27,6 +28,7 @@ const printHelp = () => {
   console.log("opencode-pixel-office installer\n");
   console.log("Usage:");
   console.log("  opencode-pixel-office install [--yes] [--port <number>]");
+  console.log("  opencode-pixel-office uninstall");
   console.log("\nOptions:");
   console.log("  --port <number> Configure the server port (default: 5100)");
   console.log("  --no-json       Skip updating opencode.json");
@@ -63,6 +65,47 @@ const copyRecursiveSync = (src, dest) => {
 };
 
 const run = async () => {
+  if (shouldUninstall) {
+    const targetPluginPath = path.join(DEFAULT_PLUGIN_DIR, PLUGIN_NAME);
+
+    // Remove Plugin
+    if (fs.existsSync(targetPluginPath)) {
+      fs.unlinkSync(targetPluginPath);
+      console.log(`✓ Removed plugin: ${targetPluginPath}`);
+    } else {
+      console.log(`- Plugin not found at ${targetPluginPath}`);
+    }
+
+    // Remove App
+    if (fs.existsSync(DEFAULT_APP_DIR)) {
+      fs.rmSync(DEFAULT_APP_DIR, { recursive: true, force: true });
+      console.log(`✓ Removed app directory: ${DEFAULT_APP_DIR}`);
+    } else {
+      console.log(`- App directory not found at ${DEFAULT_APP_DIR}`);
+    }
+
+    // Clean up Config (Legacy)
+    if (fs.existsSync(DEFAULT_CONFIG_PATH) && !skipJson) {
+      try {
+        const raw = fs.readFileSync(DEFAULT_CONFIG_PATH, "utf8");
+        const data = JSON.parse(raw);
+        if (Array.isArray(data.plugin)) {
+          const initialLength = data.plugin.length;
+          data.plugin = data.plugin.filter(p => p !== PLUGIN_ID);
+          if (data.plugin.length !== initialLength) {
+            fs.writeFileSync(DEFAULT_CONFIG_PATH, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+            console.log(`✓ Removed ${PLUGIN_ID} from opencode.json`);
+          }
+        }
+      } catch (e) {
+        // ignore config errors on uninstall
+      }
+    }
+
+    console.log("\nUninstallation complete.");
+    process.exit(0);
+  }
+
   if (!shouldInstall) {
     printHelp();
     process.exit(0);
