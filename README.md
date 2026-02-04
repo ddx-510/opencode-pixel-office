@@ -1,9 +1,7 @@
 # Pixel Office
 
 Pixel Office is an OpenCode plugin that visualizes agent activity (LLM thoughts, tool usage, file modifications) in a live, retro-style office scene.
-
-![Pixel Office Overview](docs/assets/screenshot-1.png)
-
+<img width="1455" height="824" alt="Screenshot 2026-02-04 at 7 03 58 PM" src="https://github.com/user-attachments/assets/e20e2e68-a032-4747-a027-aacca0f274e5" />
 ## Overview
 
 The system consists of three main parts:
