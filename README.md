@@ -66,16 +66,23 @@ A standard OpenCode plugin script that hooks into the event bus:
 -   `session` events (status changes)
 -   `fs` events (file modifications)
 
-## Setup & Installation
+## Installation
 
-### 1. Start the Server
+### For Users
+If you just want to use the plugin:
+👉 **[Read the Installation Guide](docs/installation.md)**
+
+### For Developers
+If you want to modify the source code or build from scratch:
+
+#### 1. Start the Server
 ```bash
 npm install
 npm start
 # Server runs on http://localhost:5100
 ```
 
-### 2. Install the Plugin
+#### 2. Install the Plugin (Dev Mode)
 Copy the plugin script to your OpenCode configuration:
 ```bash
 mkdir -p .opencode/plugins
