@@ -62,27 +62,6 @@ const copyRecursiveSync = (src, dest) => {
   }
 };
 
-const updateConfig = async () => {
-  if (skipJson) {
-    return;
-  }
-  if (!fs.existsSync(DEFAULT_CONFIG_PATH)) {
-    return;
-  }
-  try {
-    const raw = fs.readFileSync(DEFAULT_CONFIG_PATH, "utf8");
-    const data = JSON.parse(raw);
-    const list = Array.isArray(data.plugin) ? data.plugin : [];
-    if (!list.includes(PLUGIN_ID)) {
-      data.plugin = [...list, PLUGIN_ID];
-      fs.writeFileSync(DEFAULT_CONFIG_PATH, `${JSON.stringify(data, null, 2)}\n`, "utf8");
-      console.log(`✓ Added ${PLUGIN_ID} to opencode.json`);
-    }
-  } catch (error) {
-    console.warn(`Failed to update ${DEFAULT_CONFIG_PATH}:`, error);
-  }
-};
-
 const run = async () => {
   if (!shouldInstall) {
     printHelp();
@@ -164,7 +143,6 @@ const run = async () => {
 
   console.log(`✓ Standalone app installed to ${DEFAULT_APP_DIR}`);
 
-  await updateConfig();
   console.log("\nSuccess! Restart OpenCode to launch Pixel Office.");
 };
 
