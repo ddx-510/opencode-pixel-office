@@ -71,8 +71,8 @@ Monitor your agents from your phone or tablet!
 -   **Network Access**: The server automatically binds to your LAN IP.
 -   **QR Code**: In the dashboard, click the Network URL in the top-right corner to reveal a QR code. Scan it to instantly connect.
 -   **Responsive Design**: The dashboard adapts to portrait and landscape modes on mobile devices.
+![WechatIMG524](https://github.com/user-attachments/assets/c5420d78-9c87-4062-b034-21ae3defd52f)
 
-![Mobile View](docs/mobile_preview.png)
 
 ## Installation
 
