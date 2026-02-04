@@ -66,19 +66,54 @@ A standard OpenCode plugin script that hooks into the event bus:
 
 ## Installation
 
-### For Users
-If you just want to use the plugin:
-👉 **[Read the Installation Guide](docs/installation.md)**
+## Installation
 
-### For Developers
-If you want to modify the source code or build from scratch:
+### 🚀 For Users (The Easy Way)
 
-#### 1. Start the Server
+1.  **Install the Global Package**:
+    ```bash
+    npm install -g opencode-pixel-office
+    ```
+
+2.  **Run the Installer**:
+    ```bash
+    opencode-pixel-office install
+    ```
+    This sets up the standalone app in `~/.opencode/pixel-office` and enables the plugin in your `opencode.json`.
+
+3.  **Start OpenCode**:
+    Simply open your IDE. Pixel Office will auto-launch in your browser at `http://localhost:5100`.
+
+### 🛠️ For Developers
+
+If you want to modify the source code or contribute:
+
+#### 1. Clone & Install
 ```bash
+git clone https://github.com/your-username/opencode-pixel-office.git
+cd opencode-pixel-office
 npm install
-npm start
-# Server runs on http://localhost:5100
 ```
+
+#### 2. Start the Server (Dev Mode)
+```bash
+npm start
+# Server runs on http://localhost:5100, watching for changes
+```
+
+#### 3. Start the Client (Dev Mode)
+In a separate terminal:
+```bash
+npm run dev:client
+```
+
+#### 4. Install the Plugin (Dev Mode)
+To use your *local* version instead of the global one:
+```bash
+mkdir -p ~/.opencode/plugins
+cp plugin/pixel-office.js ~/.opencode/plugins/
+```
+(The plugin automatically prefers your local `server/` if you are opening the `pixel-opencode` project in OpenCode.)
 
 #### 2. Install the Plugin (Dev Mode)
 Copy the plugin script to your OpenCode configuration:

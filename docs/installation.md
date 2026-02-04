@@ -1,102 +1,55 @@
-# Installation
+# Installation Guide
 
-## For humans
+## 🚀 For Users (The Easy Way)
 
-This is the end-user flow (no git clone).
+This package is designed to verify and visualize agent behavior in OpenCode.
 
-### Step 1: Install the package
-
+### Step 1: Install the Package
+Open your terminal and install the package globally:
 ```bash
 npm install -g opencode-pixel-office
 ```
 
-### Step 2: Enable the plugin (JSON only)
-
-Run the installer (this updates `opencode.json`):
-
+### Step 2: Run the Installer
+Run the interactive installer to set up the plugin and the standalone application:
 ```bash
 opencode-pixel-office install
 ```
-
-Or add it manually to `~/.config/opencode/opencode.json`:
-
-```json
-{
-  "plugin": [
-    "opencode-pixel-office@latest"
-  ]
-}
-```
+**What this does:**
+-   Copies the Pixel Office app to `~/.opencode/pixel-office`.
+-   Installs production dependencies in that folder.
+-   Adds the plugin entry to your `~/.config/opencode/opencode.json`.
 
 ### Step 3: Start OpenCode
+Now, simply open your OpenCode IDE.
+-   Pixel Office will **automatically start** a local server.
+-   It will **open your browser** to [http://localhost:5100](http://localhost:5100).
+-   You will see your agent's thoughts and actions visualized in real-time!
 
-When OpenCode loads the plugin, it will:
+---
 
-- start the Pixel Office server automatically (local endpoint only)
-- open the dashboard in your default browser
-- stream all OpenCode events to the server
+## 🛠️ For Developers
 
-Default UI: `http://localhost:5100`
+If you want to contribute to Pixel Office or modify the source code:
 
-### Configuration
+1.  **Clone the Repository**:
+    ```bash
+    git clone https://github.com/your-username/pixel-opencode.git
+    cd pixel-opencode
+    ```
 
-```bash
-export PIXEL_OFFICE_URL="http://localhost:5100/events"
-```
+2.  **Install Dependencies**:
+    ```bash
+    npm install
+    ```
 
-If the endpoint is not local, the plugin will not attempt to start a server or open a browser.
+3.  **Start Development Servers**:
+    -   **Server**: `npm start` (Runs on port 5100)
+    -   **Client**: `npm run dev:client` (Vite dev server)
 
-## For LLM agents
-
-When asked to install, follow this exact sequence:
-
-1) Install the package:
-
-```bash
-npm install -g opencode-pixel-office
-```
-
-2) Enable the plugin using the CLI installer:
-
-```bash
-opencode-pixel-office install
-```
-
-3) Tell the user to start OpenCode and open `http://localhost:5100`.
-
-## For maintainers
-
-### Local development
-
-```bash
-npm install
-npm run build:client
-npm start
-```
-
-### Package the plugin
-
-```bash
-mkdir -p dist/plugin
-cp plugin/pixel-office.js dist/plugin/pixel-office.js
-```
-
-### Publish to npm
-
-```bash
-npm publish
-```
-
-## Interactive installer
-
-The CLI installer copies the plugin into your OpenCode plugin directory and updates `opencode.json`.
-
-```bash
-opencode-pixel-office install
-```
-
-Optional flags:
-
-```bash
-opencode-pixel-office install --config ~/.config/opencode/opencode.json
-```
+4.  **Install Local Plugin**:
+    ```bash
+    mkdir -p ~/.opencode/plugins
+    cp plugin/pixel-office.js ~/.opencode/plugins/
+    ```
+    *Note: When you open this repository in OpenCode, the plugin automatically detects the local `server/` folder and uses it instead of the global installation.*

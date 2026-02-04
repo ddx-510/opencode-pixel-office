@@ -3,6 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "files": [
+    "bin",
+    "client/dist",
+    "plugin",
+    "server",
+    "README.md"
+  ],
   "bin": {
     "opencode-pixel-office": "bin/opencode-pixel-office.js"
   },
@@ -24,6 +31,7 @@
     "react-dom": "^18.3.1",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
+    "tsx": "^4.19.2",
     "ws": "^8.16.0"
   },
   "devDependencies": {
@@ -34,7 +42,6 @@
     "autoprefixer": "^10.4.24",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
-    "tsx": "^4.19.2",
     "typescript": "^5.6.3",
     "vite": "^5.4.8"
   }
