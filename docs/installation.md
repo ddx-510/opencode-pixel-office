@@ -1,55 +1,98 @@
-# Installation Guide
+# Installation
 
-## 🚀 For Users (The Easy Way)
+## Quick Install
 
-This package is designed to verify and visualize agent behavior in OpenCode.
-
-### Step 1: Install the Package
-Open your terminal and install the package globally:
 ```bash
+# Install globally
 npm install -g opencode-pixel-office
-```
 
-### Step 2: Run the Installer
-Run the interactive installer to set up the plugin and the standalone application:
-```bash
+# Install for both OpenCode and Claude Code
 opencode-pixel-office install
+
+# Start the server
+opencode-pixel-office start
 ```
-**What this does:**
--   Copies the Pixel Office app to `~/.opencode/pixel-office`.
--   Installs production dependencies in that folder.
--   Installs the `pixel-office.js` plugin to `~/.opencode/plugins/`, which OpenCode automatically loads.
 
-### Step 3: Start OpenCode
-Now, simply open your OpenCode IDE.
--   Pixel Office will **automatically start** a local server.
--   It will **open your browser** to [http://localhost:5100](http://localhost:5100).
--   You will see your agent's thoughts and actions visualized in real-time!
+The dashboard opens at `http://localhost:5100`.
 
----
+## What Gets Installed
 
-## 🛠️ For Developers
+The `install` command sets up everything automatically:
 
-If you want to contribute to Pixel Office or modify the source code:
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| OpenCode Plugin | `~/.opencode/plugins/pixel-office.js` | Captures OpenCode events |
+| Claude Code Hooks | `~/.claude/hooks/` + `settings.json` | Captures Claude Code events |
+| Server/App | `~/.opencode/pixel-office/` | Runs the dashboard |
 
-1.  **Clone the Repository**:
-    ```bash
-    git clone https://github.com/your-username/pixel-opencode.git
-    cd pixel-opencode
-    ```
+## CLI Commands
 
-2.  **Install Dependencies**:
-    ```bash
-    npm install
-    ```
+```bash
+opencode-pixel-office install      # Install everything
+opencode-pixel-office start        # Start server & open browser
+opencode-pixel-office stop         # Stop the server
+opencode-pixel-office status       # Check what's installed
+opencode-pixel-office uninstall    # Remove everything
+opencode-pixel-office --version    # Show version
+```
 
-3.  **Start Development Servers**:
-    -   **Server**: `npm start` (Runs on port 5100)
-    -   **Client**: `npm run dev:client` (Vite dev server)
+### Options
 
-4.  **Install Local Plugin**:
-    ```bash
-    mkdir -p ~/.opencode/plugins
-    cp plugin/pixel-office.js ~/.opencode/plugins/
-    ```
-    *Note: When you open this repository in OpenCode, the plugin automatically detects the local `server/` folder and uses it instead of the global installation.*
+- `--port <number>` - Custom port (default: 5100)
+
+## Using with OpenCode
+
+After installation, just start OpenCode. Events are automatically sent to Pixel Office.
+
+## Using with Claude Code
+
+After installation, just use Claude Code CLI. Events are automatically sent via hooks.
+
+## Viewing the Dashboard
+
+1. Run `opencode-pixel-office start`
+2. Dashboard opens at `http://localhost:5100`
+3. Use tabs to switch between **OpenCode Office** and **Claude Office**
+
+## Mobile Access
+
+1. Click the network URL in the top-right corner of the dashboard
+2. Scan the QR code with your phone
+3. View agents from anywhere on your local network
+
+## Environment Variables
+
+```bash
+# Custom server URL (optional)
+export PIXEL_OFFICE_URL="http://localhost:5100/events"
+
+# Custom port (optional)
+export PIXEL_OFFICE_PORT="5100"
+```
+
+## Uninstalling
+
+```bash
+opencode-pixel-office uninstall
+```
+
+This removes:
+- OpenCode plugin
+- Claude Code hooks
+- Server/app directory
+- All configuration
+
+## For Developers
+
+```bash
+git clone https://github.com/anthropics/opencode-pixel-office.git
+cd opencode-pixel-office
+npm install
+
+# Dev mode
+npm start              # Server
+npm run dev:client     # Client (separate terminal)
+
+# Build
+npm run build:client
+```

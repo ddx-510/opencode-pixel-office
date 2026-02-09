@@ -7,6 +7,7 @@ type Agent = {
   model?: string;
   provider?: string;
   status?: string;
+  source?: "opencode" | "claude";
   lastMessageSnippet?: string;
   lastMessageAt?: number;
   lastStreamingAt?: number;

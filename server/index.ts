@@ -72,6 +72,7 @@ type OfficeState = {
 
 type EventPayload = {
   type?: string;
+  source?: "opencode" | "claude";
   properties?: Record<string, any>;
 };
 
@@ -711,6 +712,7 @@ const upsertAgentFromEvent = (event: EventPayload) => {
   const sessionTitle = extractSessionTitle(event);
   const updatedAt = Date.now();
   const eventType = getEventType(event);
+  const eventSource = event?.source || "opencode";
   const isPartUpdate = eventType === "message.part.updated";
   const messageId = isPartUpdate
     ? safeString(part.messageID ?? "", "")
@@ -777,6 +779,7 @@ const upsertAgentFromEvent = (event: EventPayload) => {
         sessionTitle: nextSessionTitle,
         isBackground: nextIsBackground,
         status: nextStatus,
+        source: existing.source || eventSource,
         lastEventType: event?.type || existing.lastEventType,
         lastMessageSnippet: trimmedSnippet,
         lastMessageAt: nextMessageAt,
@@ -800,6 +803,7 @@ const upsertAgentFromEvent = (event: EventPayload) => {
         sessionTitle: nextSessionTitle,
         isBackground: nextIsBackground,
         status,
+        source: eventSource,
         lastEventType: event?.type || "unknown",
         lastMessageSnippet: trimmedSnippet,
         lastMessageAt: hasMessageUpdate ? Date.now() : 0,

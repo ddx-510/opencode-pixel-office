@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import QRCode from "react-qr-code";
 import { AgentPanel } from "./components/AgentPanel";
 import { ScreenFrame } from "./components/ScreenFrame";
 import { SessionPanel } from "./components/SessionPanel";
 import { TodoPanel } from "./components/TodoPanel";
 import { useOfficeState } from "./useOfficeState";
+
+type OfficeTab = "opencode" | "claude";
 
 const App = () => {
   const {
@@ -27,6 +29,33 @@ const App = () => {
   } = useOfficeState();
 
   const [showQr, setShowQr] = useState(false);
+  const [activeTab, setActiveTab] = useState<OfficeTab>("opencode");
+
+  // Filter agents by source
+  const filteredAgents = useMemo(() => {
+    return agents.filter((agent) => {
+      const source = agent.source || "opencode";
+      return source === activeTab;
+    });
+  }, [agents, activeTab]);
+
+  // Filter interactions to only include agents in the current tab
+  const filteredInteractions = useMemo(() => {
+    const agentIds = new Set(filteredAgents.map((a) => a.id));
+    return interactions.filter(
+      (i) => agentIds.has(i.from) || agentIds.has(i.to)
+    );
+  }, [interactions, filteredAgents]);
+
+  // Count agents per tab for badges
+  const opencodeCount = useMemo(
+    () => agents.filter((a) => (a.source || "opencode") === "opencode").length,
+    [agents]
+  );
+  const claudeCount = useMemo(
+    () => agents.filter((a) => a.source === "claude").length,
+    [agents]
+  );
 
   const activeLabel = activeSessionId ? activeSessionId.slice(0, 10) : "N/A";
   const version = appVersion ? `v${appVersion}` : "v1.0.0";
@@ -42,9 +71,34 @@ const App = () => {
         <div className="gamish-card logo-card">
           <div className="flex flex-col">
             <h1 className="text-sm text-primary mb-1 tracking-widest">PIXEL OFFICE</h1>
-            <p className="text-[9px] text-muted-foreground">OPENCODE AGENT OPS // {version}</p>
+            <p className="text-[9px] text-muted-foreground">AI AGENT OPS // {version}</p>
           </div>
         </div>
+
+        {/* Office Tabs */}
+        <div className="flex gap-1">
+          <button
+            onClick={() => setActiveTab("opencode")}
+            className={`office-tab ${activeTab === "opencode" ? "active" : ""}`}
+          >
+            <span className="tab-icon">◈</span>
+            <span>OpenCode</span>
+            {opencodeCount > 0 && (
+              <span className="tab-badge">{opencodeCount}</span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("claude")}
+            className={`office-tab ${activeTab === "claude" ? "active" : ""}`}
+          >
+            <span className="tab-icon">◇</span>
+            <span>Claude</span>
+            {claudeCount > 0 && (
+              <span className="tab-badge">{claudeCount}</span>
+            )}
+          </button>
+        </div>
+
         <div className={`status-badge ${connected ? "live" : ""}`}>
           <span className="text-[8px] opacity-70 mb-1">SYSTEM STATUS</span>
           <span className="font-bold">{connected ? "ONLINE" : "OFFLINE"}</span>
@@ -80,13 +134,14 @@ const App = () => {
         <ScreenFrame
           bossMessageText={bossMessageText}
           bossStatus={bossStatus}
-          agents={agents}
-          interactions={interactions}
+          agents={filteredAgents}
+          interactions={filteredInteractions}
           sessions={sessions}
           activeSessionId={activeSessionId}
           lastTodoSummary={lastTodoSummary}
           selectedAgentId={selectedAgentId}
           onSelectAgent={setSelectedAgentId}
+          activeTab={activeTab}
         />
 
         <aside className="sidebar-stack">

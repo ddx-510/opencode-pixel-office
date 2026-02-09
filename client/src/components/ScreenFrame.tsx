@@ -12,6 +12,7 @@ type ScreenFrameProps = {
   lastTodoSummary: TodoSummary | null;
   selectedAgentId: string | null;
   onSelectAgent: (id: string | null) => void;
+  activeTab?: "opencode" | "claude";
 };
 
 const ScreenFrame = ({
@@ -24,10 +25,14 @@ const ScreenFrame = ({
   lastTodoSummary,
   selectedAgentId,
   onSelectAgent,
+  activeTab = "opencode",
 }: ScreenFrameProps) => (
   <div className="flex flex-col gap-4">
     <BossBox message={bossMessageText} status={bossStatus} />
     <div className="pixi-wrapper">
+      <div className="office-label">
+        {activeTab === "opencode" ? "◈ OPENCODE OFFICE" : "◇ CLAUDE OFFICE"}
+      </div>
       <div className="w-full flex justify-center bg-[#101615] rounded-lg overflow-hidden">
         <PixiScene
           agents={agents}

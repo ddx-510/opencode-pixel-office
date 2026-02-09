@@ -395,9 +395,104 @@ main {
   :root {
     font-size: 14px;
   }
-  
+
   .gamish-card {
     border-width: 2px;
+  }
+}
+
+/* Office Tabs */
+.office-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: #ffffff;
+  border: 2px solid #a5cbde;
+  color: #64748b;
+  font-family: var(--font-display);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: none;
+  box-shadow:
+    inset 1px 1px 0 #ffffff,
+    2px 2px 0 rgba(0,0,0,0.1);
+}
+
+.office-tab:hover {
+  background: #f0f9ff;
+  border-color: #6296e8;
+}
+
+.office-tab.active {
+  background: #6296e8;
+  color: #ffffff;
+  border-color: #3d5052;
+  box-shadow:
+    inset 2px 2px 0 #84e6fd,
+    inset -2px -2px 0 #3d5052,
+    2px 2px 0 rgba(0,0,0,0.2);
+  text-shadow: 1px 1px 0 #3d5052;
+}
+
+.office-tab .tab-icon {
+  font-size: 12px;
+}
+
+.office-tab .tab-badge {
+  background: #84e6fd;
+  color: #3d5052;
+  padding: 2px 6px;
+  font-size: 8px;
+  font-weight: bold;
+  border: 1px solid #3d5052;
+  margin-left: 4px;
+}
+
+.office-tab.active .tab-badge {
+  background: #ffffff;
+  color: #6296e8;
+}
+
+/* Office Label inside pixi wrapper */
+.office-label {
+  position: absolute;
+  top: -12px;
+  right: 20px;
+  background: #3d5052;
+  color: #84e6fd;
+  padding: 4px 10px;
+  font-family: var(--font-display);
+  font-size: 8px;
+  border: 2px solid #6296e8;
+  box-shadow: 2px 2px 0 #0f172a;
+  z-index: 10;
+  letter-spacing: 1px;
+}
+
+/* Header grid update for tabs */
+header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+header .logo-card {
+  margin-right: auto;
+}
+
+@media (max-width: 768px) {
+  .office-tab {
+    padding: 8px 12px;
+    font-size: 8px;
+  }
+
+  .office-tab .tab-icon {
+    display: none;
   }
 }
 
