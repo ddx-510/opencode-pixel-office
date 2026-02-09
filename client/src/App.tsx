@@ -164,7 +164,7 @@ const App = () => {
             onSelectSession={setSelectedSessionId}
           />
           <TodoPanel todos={todos} />
-          <AgentPanel selectedAgent={selectedAgent} />
+          <AgentPanel selectedAgent={selectedAgent} sessions={sessions} />
         </aside>
       </main>
     </div>

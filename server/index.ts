@@ -581,6 +581,7 @@ const updateSessionStatus = (event: EventPayload) => {
     return;
   }
   const props = event?.properties || {};
+  const info = props.info || {};
   const sessionId = safeString(props.sessionID ?? "", "");
   if (!sessionId) {
     return;
@@ -595,7 +596,12 @@ const updateSessionStatus = (event: EventPayload) => {
     }
     : {
       id: sessionId,
+      title: safeString(info.title ?? "", ""),
+      slug: safeString(info.slug ?? "", ""),
       status,
+      version: safeString(info.version ?? "", ""),
+      directory: safeString(info.directory ?? "", ""),
+      projectId: safeString(info.projectID ?? "", ""),
       updatedAt: Date.now(),
     };
   officeState.sessions.set(sessionId, nextInfo);
