@@ -57,7 +57,16 @@ const App = () => {
     [agents]
   );
 
-  const activeLabel = activeSessionId ? activeSessionId.slice(0, 10) : "N/A";
+  const activeSession = sessions.find((s) => s.id === activeSessionId);
+  const activeRepoName = activeSession?.directory?.split("/").pop()
+    || activeSession?.title
+    || activeSession?.slug
+    || "";
+  const activeLabel = activeSession
+    ? activeRepoName
+      ? `${activeRepoName} · ${activeSessionId?.slice(0, 6)}`
+      : activeSessionId?.slice(0, 6) || "N/A"
+    : "N/A";
   const version = appVersion ? `v${appVersion}` : "v1.0.0";
   const todoSummary = lastTodoSummary
     ? `${lastTodoSummary.completed}/${lastTodoSummary.total}`

@@ -25,14 +25,11 @@ const ScreenFrame = ({
   lastTodoSummary,
   selectedAgentId,
   onSelectAgent,
-  activeTab = "opencode",
+  activeTab,
 }: ScreenFrameProps) => (
   <div className="flex flex-col gap-4">
     <BossBox message={bossMessageText} status={bossStatus} />
     <div className="pixi-wrapper">
-      <div className="office-label">
-        {activeTab === "opencode" ? "◈ OPENCODE OFFICE" : "◇ CLAUDE OFFICE"}
-      </div>
       <div className="w-full flex justify-center bg-[#101615] rounded-lg overflow-hidden">
         <PixiScene
           agents={agents}
@@ -42,6 +39,7 @@ const ScreenFrame = ({
           lastTodoSummary={lastTodoSummary}
           selectedAgentId={selectedAgentId}
           onSelectAgent={onSelectAgent}
+          activeTab={activeTab}
         />
       </div>
     </div>

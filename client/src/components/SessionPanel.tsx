@@ -1,5 +1,19 @@
 import type { SessionInfo } from "../useOfficeState";
 
+// Format session display name: repo name + short session ID
+const formatSessionName = (session: SessionInfo) => {
+  const repoName = session.directory?.split("/").pop()
+    || session.title
+    || session.slug
+    || "";
+  const shortId = session.id.slice(0, 6);
+
+  if (repoName) {
+    return `${repoName} · ${shortId}`;
+  }
+  return shortId;
+};
+
 type SessionPanelProps = {
   sessions: SessionInfo[];
   activeLabel: string;
@@ -65,7 +79,7 @@ const SessionPanel = ({
                 className={`session-item ${session.id === selectedSessionId ? "active" : ""}`}
                 onClick={() => onSelectSession(session.id)}
               >
-                <span className="truncate">{session.title || session.slug || session.id.slice(0, 8)}</span>
+                <span className="truncate">{formatSessionName(session)}</span>
                 {session.id === selectedSessionId && <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />}
               </button>
             ))
@@ -79,7 +93,7 @@ const SessionPanel = ({
           <div className="space-y-1.5">
             <div className="flex flex-col">
               <span className="text-[8px] text-slate-500">Identifier</span>
-              <span className="text-[9px] text-slate-300 break-all">{selectedSession.title || selectedSession.slug || "-"}</span>
+              <span className="text-[9px] text-slate-300 break-all">{formatSessionName(selectedSession)}</span>
             </div>
             {selectedSession.status && (
               <div className="flex justify-between items-center">

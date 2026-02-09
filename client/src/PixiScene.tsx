@@ -96,6 +96,7 @@ type PixiSceneProps = {
   lastTodoSummary: TodoSummary | null;
   selectedAgentId: string | null;
   onSelectAgent: (id: string | null) => void;
+  activeTab?: "opencode" | "claude";
 };
 
 const TILE = 4;
@@ -198,7 +199,7 @@ const pickNode = (id: string, nodes: { row: number; col: number }[], fallback: {
 const nodeKey = (row: number, col: number) => `${row},${col}`;
 const EXIT_OFFSET_X = 12;
 const EXIT_OFFSET_Y = -4;
-const EXIT_RADIUS = 2;
+const EXIT_RADIUS = 5;
 
 const pickExitTarget = (
   current: { row: number; col: number },
@@ -304,7 +305,7 @@ const statusRadius = (status: string) => {
 };
 
 const shouldBeAtDesk = (status: string) =>
-  status === "working" || status === "thinking";
+  status !== "idle" && status !== "";
 
 const pickAvatarColor = (agent: Agent) => {
   const id = agent.id || "";
@@ -313,6 +314,27 @@ const pickAvatarColor = (agent: Agent) => {
     hash = (hash * 31 + id.charCodeAt(i)) % 997;
   }
   return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+};
+
+// Tag color palettes for different sessions (fill, stroke pairs)
+const TAG_COLORS: [number, number][] = [
+  [0x2b5a3c, 0x73d28f], // green
+  [0x3a4a6b, 0x7a9fd8], // blue
+  [0x5a3a5a, 0xc28fd2], // purple
+  [0x5a4a2b, 0xd2a873], // orange
+  [0x3a5a5a, 0x73c2c2], // teal
+  [0x5a2b3a, 0xd27389], // pink
+  [0x4a4a3a, 0xa8a878], // olive
+  [0x3a3a5a, 0x8888c2], // indigo
+];
+
+const pickTagColors = (sessionId?: string): [number, number] => {
+  if (!sessionId) return TAG_COLORS[0];
+  let hash = 0;
+  for (let i = 0; i < sessionId.length; i += 1) {
+    hash = (hash * 31 + sessionId.charCodeAt(i)) % 997;
+  }
+  return TAG_COLORS[hash % TAG_COLORS.length];
 };
 
 const statusBubbleText = (status: string) => {
@@ -470,8 +492,8 @@ const buildTileTexture = (type: string) => {
   texture.baseTexture.scaleMode = SCALE_MODES.NEAREST;
   return texture;
 };
-const TitleBadge = ({ x, y }: { x: number; y: number }) => {
-  const titleText = "OpenCode Office";
+const TitleBadge = ({ x, y, activeTab }: { x: number; y: number; activeTab?: "opencode" | "claude" }) => {
+  const titleText = activeTab === "claude" ? "Claude Office" : "OpenCode Office";
   const titleStyle = useMemo(
     () =>
       new TextStyle({
@@ -530,6 +552,7 @@ const SceneLayer = ({
   lastTodoSummary,
   selectedAgentId,
   onSelectAgent,
+  activeTab,
   sceneWidth,
   sceneHeight,
   setDimensions,
@@ -539,6 +562,12 @@ const SceneLayer = ({
   const spritesRef = useRef<Map<string, SpriteState>>(new Map());
   const agentCacheRef = useRef<Map<string, Agent>>(new Map());
   const [spriteSheets, setSpriteSheets] = useState<SpriteSheets>({});
+
+  // Clear sprite state when switching tabs for a clean refresh
+  useEffect(() => {
+    spritesRef.current.clear();
+    agentCacheRef.current.clear();
+  }, [activeTab]);
 
   const [tileMap, setTileMap] = useState<string[][]>(() =>
     Array.from({ length: DEFAULT_MAP_ROWS }, () =>
@@ -1307,7 +1336,7 @@ const SceneLayer = ({
         <Sprite texture={Texture.from("/office.png")} x={0} y={0} />
       </Container>
       <></>
-      <TitleBadge x={8} y={8} />
+      <TitleBadge x={8} y={8} activeTab={activeTab} />
       <Graphics
         draw={(graphics: PixiGraphics) => {
           graphics.clear();
@@ -1381,6 +1410,7 @@ const SceneLayer = ({
           const aliasLabel = (agent.alias || agent.name || agent.id || "Agent")
             .slice(0, 10)
             .toUpperCase();
+          const [tagFill, tagStroke] = pickTagColors(agent.sessionId);
           const messageEventAt =
             agent.lastEventType?.startsWith("message.") ? agent.lastEventAt || 0 : 0;
           const messageTimestamp = agent.lastMessageAt || messageEventAt || 0;
@@ -1419,14 +1449,20 @@ const SceneLayer = ({
             !isMessageUpdateEvent &&
             !isSessionEvent &&
             eventBadgeColor !== undefined;
+          const isPermissionEvent = hasRecentEvent && eventType === "permission.asked";
+          const isWaitingForInput = hasRecentEvent && eventType === "tui.toast.show";
           const activityEmoji =
-            hasRecentEdit
-              ? "✏️"
-              : agent.status === "thinking"
-                ? "💭"
-                : agent.status === "working"
-                  ? "🛠️"
-                  : "";
+            isPermissionEvent
+              ? "❓"
+              : isWaitingForInput
+                ? "⏳"
+                : hasRecentEdit
+                  ? "✏️"
+                  : agent.status === "thinking"
+                    ? "💭"
+                    : agent.status === "working"
+                      ? "🛠️"
+                      : "";
           const showActivity = Boolean(activityEmoji);
           const messageLines = wrapLines(
             messageText,
@@ -1514,8 +1550,14 @@ const SceneLayer = ({
                   }
 
                   if (isToolEvent) {
-                    graphics.lineStyle(2, toolRingColor, 0.9);
-                    graphics.drawCircle(sprite.x, y + motion + 8, 80); // Larger ring
+                    // Small notification square at top-right of agent
+                    const notifSize = 6;
+                    const notifX = sprite.x + 12;
+                    const notifY = y - 24 + motion;
+                    graphics.beginFill(toolRingColor, 0.95);
+                    graphics.lineStyle(1, 0xffffff, 0.8);
+                    graphics.drawRoundedRect(notifX, notifY, notifSize, notifSize, 1);
+                    graphics.endFill();
                     graphics.lineStyle(0, 0, 0);
                   }
 
@@ -1548,8 +1590,8 @@ const SceneLayer = ({
                     aliasWidth,
                     chipHeight,
                     6,
-                    0x2b5a3c,
-                    0x73d28f
+                    tagFill,
+                    tagStroke
                   );
 
                   if (showTodoPulse && agent.id === todoTargetId) {

@@ -472,6 +472,12 @@ main {
   letter-spacing: 1px;
 }
 
+.office-label .session-name {
+  color: #a8d8b9;
+  font-weight: normal;
+  letter-spacing: 0.5px;
+}
+
 /* Header grid update for tabs */
 header {
   display: flex;
