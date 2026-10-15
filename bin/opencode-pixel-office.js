@@ -105,21 +105,55 @@ const copyRecursiveSync = (src, dest) => {
   }
 };
 
-const stopServer = (port) => {
+// Cross-platform: list PIDs listening on a TCP port.
+// win32: parse `netstat -ano -p tcp`; else: `lsof -t -i :PORT`.
+const getPidsOnPort = (port) => {
   try {
-    const pidOutput = execSync(`lsof -t -i :${port} 2>/dev/null`).toString().trim();
-    if (pidOutput) {
-      const pids = pidOutput.split("\n").map((p) => parseInt(p, 10)).filter((p) => !isNaN(p) && p > 0);
-      for (const pid of pids) {
-        try {
-          process.kill(pid);
-          console.log(`✓ Stopped server (PID: ${pid})`);
-        } catch {}
+    if (process.platform === "win32") {
+      const output = execSync("netstat -ano -p tcp", { stdio: ["ignore", "pipe", "ignore"] }).toString();
+      const pids = [];
+      for (const line of output.split(/\r?\n/)) {
+        const match = line.trim().match(/^TCP\s+\S+:(\d+)\s+\S+\s+LISTENING\s+(\d+)$/i);
+        if (match && parseInt(match[1], 10) === port) {
+          pids.push(parseInt(match[2], 10));
+        }
       }
-      return pids.length > 0;
+      return pids;
+    }
+    const pidOutput = execSync(`lsof -t -i :${port}`, { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+    if (!pidOutput) {
+      return [];
+    }
+    return pidOutput.split("\n").map((p) => parseInt(p, 10)).filter((p) => !isNaN(p) && p > 0);
+  } catch {
+    return [];
+  }
+};
+
+// Cross-platform: open a URL in the default browser.
+const openBrowser = (url) => {
+  try {
+    if (process.platform === "win32") {
+      execSync(`start "" "${url}"`, { stdio: "ignore" });
+    } else {
+      const openCmd = process.platform === "darwin" ? "open" : "xdg-open";
+      execSync(`${openCmd} "${url}"`, { stdio: "ignore" });
     }
   } catch {}
-  return false;
+  console.log(`Opened ${url}`);
+};
+
+const stopServer = (port) => {
+  const pids = getPidsOnPort(port);
+  let stopped = false;
+  for (const pid of pids) {
+    try {
+      process.kill(pid);
+      console.log(`✓ Stopped server (PID: ${pid})`);
+      stopped = true;
+    } catch {}
+  }
+  return stopped;
 };
 
 // Check if opencode plugin is installed
@@ -317,11 +351,7 @@ const run = async () => {
     const config = loadConfig();
     const port = config.port || 5100;
 
-    let serverRunning = false;
-    try {
-      const pidOutput = execSync(`lsof -t -i :${port} 2>/dev/null`).toString().trim();
-      serverRunning = !!pidOutput;
-    } catch {}
+    const serverRunning = getPidsOnPort(port).length > 0;
 
     console.log(`  Server:            ${serverRunning ? `✓ Running on port ${port}` : "✗ Not running"}`);
     console.log("");
@@ -403,45 +433,56 @@ const run = async () => {
     }
 
     // Check if already running
-    try {
-      const pidOutput = execSync(`lsof -t -i :${port} 2>/dev/null`).toString().trim();
-      if (pidOutput) {
-        console.log(`Pixel Office is already running on port ${port}`);
-        const url = `http://localhost:${port}`;
-        const openCmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-        try {
-          execSync(`${openCmd} ${url}`);
-        } catch {}
-        console.log(`Opened ${url}`);
-        process.exit(0);
-      }
-    } catch {}
+    if (getPidsOnPort(port).length > 0) {
+      console.log(`Pixel Office is already running on port ${port}`);
+      openBrowser(`http://localhost:${port}`);
+      process.exit(0);
+    }
 
-    // Resolve tsx binary
+    // Resolve tsx binary. On Windows the extensionless `.bin/tsx` is a bash
+    // shim and cannot be spawned directly, so prefer the `tsx.cmd` wrapper.
     let tsxBin = null;
-    const tsxLocations = [
-      path.join(serverCwd, "node_modules", ".bin", "tsx"),
-      path.join(__dirname, "..", "node_modules", ".bin", "tsx"),
-      path.join(DEFAULT_APP_DIR, "node_modules", ".bin", "tsx"),
+    const tsxNames = process.platform === "win32" ? ["tsx.cmd", "tsx"] : ["tsx"];
+    const tsxDirs = [
+      path.join(serverCwd, "node_modules", ".bin"),
+      path.join(__dirname, "..", "node_modules", ".bin"),
+      path.join(DEFAULT_APP_DIR, "node_modules", ".bin"),
     ];
-    for (const loc of tsxLocations) {
-      if (fs.existsSync(loc)) {
-        tsxBin = loc;
+    for (const dir of tsxDirs) {
+      for (const name of tsxNames) {
+        const loc = path.join(dir, name);
+        if (fs.existsSync(loc)) {
+          tsxBin = loc;
+          break;
+        }
+      }
+      if (tsxBin) {
         break;
       }
     }
     if (!tsxBin) {
-      tsxBin = "tsx";
+      tsxBin = process.platform === "win32" ? "tsx.cmd" : "tsx";
     }
 
     const { spawn } = await import("node:child_process");
 
-    const child = spawn(tsxBin, [serverScript], {
-      cwd: serverCwd,
-      env: { ...process.env, PORT: String(port) },
-      detached: true,
-      stdio: "ignore",
-    });
+    // Windows: spawn the .cmd through the shell as a single command string
+    // (avoids Node's DEP0190 warning about args with `shell: true`).
+    const child =
+      process.platform === "win32"
+        ? spawn(`"${tsxBin}" ${serverScript}`, {
+            cwd: serverCwd,
+            env: { ...process.env, PORT: String(port) },
+            detached: true,
+            stdio: "ignore",
+            shell: true,
+          })
+        : spawn(tsxBin, [serverScript], {
+            cwd: serverCwd,
+            env: { ...process.env, PORT: String(port) },
+            detached: true,
+            stdio: "ignore",
+          });
 
     child.on("error", (err) => {
       console.error(`Failed to start server: ${err.message}`);
@@ -453,12 +494,7 @@ const run = async () => {
     console.log(`Pixel Office server started on port ${port} (PID: ${child.pid})`);
 
     await new Promise((r) => setTimeout(r, 1500));
-    const url = `http://localhost:${port}`;
-    const openCmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-    try {
-      execSync(`${openCmd} ${url}`);
-    } catch {}
-    console.log(`Opened ${url}`);
+    openBrowser(`http://localhost:${port}`);
     process.exit(0);
   }
 
