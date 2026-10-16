@@ -68,7 +68,7 @@ That's it! The dashboard opens at `http://localhost:5100`.
        └───────────────┘
 ```
 
-- **OpenCode Plugin** → `~/.opencode/plugins/pixel-office.js`
+- **OpenCode Plugin** → `~/.config/opencode/plugins/pixel-office.js`
 - **Claude Code Hooks** → `~/.claude/hooks/` + `~/.claude/settings.json`
 - **Server/App** → `~/.opencode/pixel-office/`
 

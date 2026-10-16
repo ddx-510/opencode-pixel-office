@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 
 const PLUGIN_NAME = "pixel-office.js";
 const PLUGIN_ID = "opencode-pixel-office@latest";
-const DEFAULT_PLUGIN_DIR = path.join(os.homedir(), ".opencode", "plugins");
+const DEFAULT_PLUGIN_DIR = path.join(os.homedir(), ".config", "opencode", "plugins");
 const DEFAULT_APP_DIR = path.join(os.homedir(), ".opencode", "pixel-office");
 const DEFAULT_CONFIG_PATH = path.join(os.homedir(), ".config", "opencode", "opencode.json");
 const PIXEL_OFFICE_CONFIG_PATH = path.join(DEFAULT_APP_DIR, "config.json");

@@ -21,7 +21,7 @@ The `install` command sets up everything automatically:
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| OpenCode Plugin | `~/.opencode/plugins/pixel-office.js` | Captures OpenCode events |
+| OpenCode Plugin | `~/.config/opencode/plugins/pixel-office.js` | Captures OpenCode events |
 | Claude Code Hooks | `~/.claude/hooks/` + `settings.json` | Captures Claude Code events |
 | Server/App | `~/.opencode/pixel-office/` | Runs the dashboard |
 

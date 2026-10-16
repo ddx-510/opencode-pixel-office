@@ -14,6 +14,7 @@
   },
   "scripts": {
     "start": "tsx server/index.ts",
+    "test": "node --test test/translate-v2-event.test.mjs",
     "dev:client": "vite --config client/vite.config.ts",
     "build:client": "vite build --config client/vite.config.ts",
     "preview:client": "vite preview --config client/vite.config.ts"
